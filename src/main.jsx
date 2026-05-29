@@ -24,6 +24,7 @@ function App() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
+  const [orderNote, setOrderNote] = useState("");
   const [status, setStatus] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState("Tümü");
@@ -74,6 +75,7 @@ function App() {
   setSelectedTable(null);
   setCurrentOrderId(null);
   setIsCurrentOrderPending(false);
+  setOrderNote("");
   setTransferMode(false);
   setMobileCartOpen(false);
 }
@@ -164,7 +166,8 @@ async function clearOrder(orderId) {
     .update({
       total_price: 0,
       paid: false,
-      status: "cancelled"
+      status: "cancelled",
+      note: orderNote.trim()
     })
     .eq("id", orderId);
 
@@ -428,6 +431,7 @@ async function clearOrder(orderId) {
   setTransferMode(false);
   setSplitMode(false);
   setSplitSelections({});
+  setOrderNote("");
   setMobileCartOpen(false);
 
   const existingOrder = await findPendingOrderByTable(tableName);
@@ -466,6 +470,7 @@ async function clearOrder(orderId) {
 
   setCurrentOrderId(existingOrder.id);
   setIsCurrentOrderPending(existingOrder.status === "pending");
+  setOrderNote(existingOrder.note || "");
   setCart(restoredCart);
   setScreen("order");
 }
@@ -539,6 +544,7 @@ async function clearOrder(orderId) {
   setCurrentOrderId(null);
   setIsCurrentOrderPending(false);
   setSelectedTable(null);
+  setOrderNote("");
   setTransferMode(false);
   setSplitMode(false);
   setSplitSelections({});
@@ -756,6 +762,7 @@ async function clearOrder(orderId) {
     setCurrentOrderId(null);
     setIsCurrentOrderPending(false);
     setSelectedTable(null);
+    setOrderNote("");
     setMobileCartOpen(false);
     setStatus("");
     await loadOpenOrders();
@@ -798,6 +805,7 @@ async function clearOrder(orderId) {
     setCurrentOrderId(null);
     setIsCurrentOrderPending(false);
     setSelectedTable(null);
+    setOrderNote("");
     setTransferMode(false);
     setSplitMode(false);
     setSplitSelections({});
@@ -826,7 +834,8 @@ async function clearOrder(orderId) {
         table_name: selectedTable,
         total_price: total,
         paid: markPaid,
-        status: markPaid ? "completed" : "pending"
+        status: markPaid ? "completed" : "pending",
+        note: orderNote.trim()
       })
       .select()
       .single();
@@ -846,7 +855,8 @@ async function clearOrder(orderId) {
       .update({
         total_price: total,
         paid: markPaid,
-        status: markPaid ? "completed" : "pending"
+        status: markPaid ? "completed" : "pending",
+        note: orderNote.trim()
       })
       .eq("id", orderId);
 
@@ -946,6 +956,7 @@ async function clearOrder(orderId) {
     setCart({});
     setCurrentOrderId(null);
     setIsCurrentOrderPending(false);
+    setOrderNote("");
     setTransferMode(false);
     setSplitMode(false);
     setSplitSelections({});
@@ -1293,6 +1304,16 @@ async function clearOrder(orderId) {
             <h2>Adisyon</h2>
             <button className="cart-close" onClick={() => setMobileCartOpen(false)}>Kapat</button>
           </div>
+
+          <label className="order-note">
+            Sipariş Notu
+            <textarea
+              value={orderNote}
+              onChange={event => setOrderNote(event.target.value)}
+              placeholder="açık çay, şekersiz, ısıtılacak, paket olsun"
+              rows={3}
+            />
+          </label>
 
           {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
 

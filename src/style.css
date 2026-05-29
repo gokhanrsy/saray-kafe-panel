@@ -667,6 +667,36 @@ button{font-family:inherit; cursor:pointer}
   display:none;
 }
 
+.order-note{
+  display:block;
+  color:var(--muted);
+  font-weight:800;
+  margin-bottom:14px;
+}
+
+.order-note textarea{
+  width:100%;
+  resize:vertical;
+  min-height:82px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  outline:0;
+  color:var(--text);
+  background:var(--panel2);
+  padding:12px;
+  margin-top:8px;
+  font:inherit;
+}
+
+.order-note textarea:focus{
+  border-color:rgba(243,154,34,.75);
+  box-shadow:0 0 0 3px rgba(243,154,34,.12);
+}
+
+.order-note textarea::placeholder{
+  color:var(--muted);
+}
+
 .empty{color:var(--muted)}
 
 .cart-line{
