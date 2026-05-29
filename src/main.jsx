@@ -26,6 +26,7 @@ function App() {
   const [currentOrderId, setCurrentOrderId] = useState(null);
   const [isCurrentOrderPending, setIsCurrentOrderPending] = useState(false);
   const [transferMode, setTransferMode] = useState(false);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
 
@@ -278,6 +279,7 @@ async function clearOrder(orderId) {
   setStatus("");
   setSearchTerm("");
   setTransferMode(false);
+  setMobileCartOpen(false);
 
   const existingOrder = await findPendingOrderByTable(tableName);
 
@@ -389,6 +391,7 @@ async function clearOrder(orderId) {
   setIsCurrentOrderPending(false);
   setSelectedTable(null);
   setTransferMode(false);
+  setMobileCartOpen(false);
   setStatus("");
   await loadOpenOrders();
   setScreen("tables");
@@ -425,6 +428,7 @@ async function clearOrder(orderId) {
     setIsCurrentOrderPending(false);
     setSelectedTable(null);
     setTransferMode(false);
+    setMobileCartOpen(false);
     setStatus("");
     await loadOpenOrders();
     setScreen("tables");
@@ -528,6 +532,7 @@ async function clearOrder(orderId) {
     setCurrentOrderId(null);
     setIsCurrentOrderPending(false);
     setTransferMode(false);
+    setMobileCartOpen(false);
 
     await loadProducts();
   }
@@ -690,8 +695,13 @@ async function clearOrder(orderId) {
           })}
         </section>
 
-        <aside className="cart">
-          <h2>Adisyon</h2>
+        {mobileCartOpen && <button className="mobile-cart-backdrop" onClick={() => setMobileCartOpen(false)} aria-label="Adisyonu kapat" />}
+
+        <aside className={`cart ${mobileCartOpen ? "mobile-open" : ""}`}>
+          <div className="cart-head">
+            <h2>Adisyon</h2>
+            <button className="cart-close" onClick={() => setMobileCartOpen(false)}>Kapat</button>
+          </div>
 
           {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
 
@@ -742,6 +752,14 @@ async function clearOrder(orderId) {
           </button>
         </aside>
       </main>
+
+      <div className="mobile-cart-bar">
+        <div>
+          <span>Toplam</span>
+          <strong>{total} ₺</strong>
+        </div>
+        <button onClick={() => setMobileCartOpen(true)}>Adisyonu Aç</button>
+      </div>
     </div>
   );
 }
