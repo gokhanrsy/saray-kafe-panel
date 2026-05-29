@@ -647,14 +647,48 @@ async function clearOrder(orderId) {
 
   if (markPaid) {
     for (const item of cartItems) {
-      const newStock = Number(item.product.stock || 0) - item.quantity;
+      const { data: currentProduct, error: stockReadError } = await supabase
+        .from("products")
+        .select("name,stock")
+        .eq("name", item.name)
+        .single();
 
-      await supabase
+      if (stockReadError) {
+        console.error("Stock read failed", {
+          productName: item.name,
+          error: stockReadError
+        });
+        setStatus("Stok bilgisi alınamadı.");
+        return;
+      }
+
+      const currentDatabaseStock = Number(currentProduct?.stock || 0);
+      const soldQuantity = Number(item.quantity || 0);
+      const newStock = Math.max(0, currentDatabaseStock - soldQuantity);
+
+      console.log("Stock update", {
+        productName: item.name,
+        currentDatabaseStock,
+        soldQuantity,
+        newStock
+      });
+
+      const { error: stockUpdateError } = await supabase
         .from("products")
         .update({ stock: newStock })
         .eq("name", item.name);
 
-      await supabase
+      if (stockUpdateError) {
+        console.error("Stock update failed", {
+          productName: item.name,
+          attemptedStock: newStock,
+          error: stockUpdateError
+        });
+        setStatus("Stok güncellenemedi.");
+        return;
+      }
+
+      const { error: movementError } = await supabase
         .from("stock_movements")
         .insert({
           product_name: item.name,
@@ -662,6 +696,14 @@ async function clearOrder(orderId) {
           quantity: -item.quantity,
           note: `${selectedTable} satışı`
         });
+
+      if (movementError) {
+        console.error("Stock movement insert failed", {
+          productName: item.name,
+          quantity: -item.quantity,
+          error: movementError
+        });
+      }
     }
 
     setCart({});
