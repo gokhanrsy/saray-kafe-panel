@@ -611,6 +611,63 @@ async function clearOrder(orderId) {
 
     if (paidQuantity <= 0) continue;
 
+    const { data: currentProduct, error: stockReadError } = await supabase
+      .from("products")
+      .select("name,stock")
+      .eq("name", item.name)
+      .single();
+
+    if (stockReadError) {
+      console.error("Split stock read failed", {
+        productName: item.name,
+        error: stockReadError
+      });
+      setStatus("Stok bilgisi alınamadı.");
+      return;
+    }
+
+    const currentDatabaseStock = Number(currentProduct?.stock || 0);
+    const newStock = Math.max(0, currentDatabaseStock - paidQuantity);
+
+    console.log("Split stock update", {
+      productName: item.name,
+      currentDatabaseStock,
+      paidQuantity,
+      newStock
+    });
+
+    const { error: stockUpdateError } = await supabase
+      .from("products")
+      .update({ stock: newStock })
+      .eq("name", item.name);
+
+    if (stockUpdateError) {
+      console.error("Split stock update failed", {
+        productName: item.name,
+        attemptedStock: newStock,
+        error: stockUpdateError
+      });
+      setStatus("Stok güncellenemedi.");
+      return;
+    }
+
+    const { error: movementError } = await supabase
+      .from("stock_movements")
+      .insert({
+        product_name: item.name,
+        movement_type: "sale",
+        quantity: -paidQuantity,
+        note: `${selectedTable} split payment`
+      });
+
+    if (movementError) {
+      console.error("Split stock movement insert failed", {
+        productName: item.name,
+        quantity: -paidQuantity,
+        error: movementError
+      });
+    }
+
     if (remainingQuantity <= 0) {
       const { error: deleteError } = await supabase
         .from("order_items")
