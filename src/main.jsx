@@ -24,6 +24,22 @@ function App() {
   loadProducts();
   loadOpenOrders();
 }, []);
+  async function loadProducts() {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("active", true)
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error(error);
+    setStatus("Ürünler alınamadı.");
+    return;
+  }
+
+  setProducts(data || []);
+}
 
 async function loadOpenOrders() {
   const { data, error } = await supabase
