@@ -225,6 +225,12 @@ async function clearOrder(orderId) {
     }, {});
   }, [products]);
 
+  const criticalStockProducts = useMemo(() => {
+    return products
+      .filter(product => product.active !== false && Number(product.stock || 0) <= 5)
+      .sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0));
+  }, [products]);
+
   function getTodayRange() {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -745,7 +751,9 @@ async function clearOrder(orderId) {
 
         <section className="stats">
           <div><b>{products.length}</b><span>Ürün</span></div>
-          <div><b>{products.filter(p => Number(p.stock) <= 5).length}</b><span>Kritik Stok</span></div>
+          <button className="stat-card" onClick={() => setScreen("critical-stock")}>
+            <b>{criticalStockProducts.length}</b><span>Kritik Stok</span>
+          </button>
           <div><b>Hazır</b><span>Sistem</span></div>
         </section>
 
@@ -898,6 +906,48 @@ async function clearOrder(orderId) {
               </div>
             ))}
           </section>
+        </section>
+      </div>
+    );
+  }
+
+  if (screen === "critical-stock") {
+    return (
+      <div className="app critical-stock-page">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>Kritik Stok</h1>
+            <p>Stok seviyesi 5 veya altında olan aktif ürünler</p>
+          </div>
+          <button className="manage-button" onClick={() => setScreen("products")}>
+            <Boxes size={18} /> Ürün Yönetimi
+          </button>
+        </header>
+
+        <section className="critical-list">
+          {criticalStockProducts.length === 0 && (
+            <div className="critical-empty">
+              <strong>Kritik stokta ürün yok.</strong>
+              <span>Tüm aktif ürünlerin stok seviyesi yeterli görünüyor.</span>
+            </div>
+          )}
+
+          {criticalStockProducts.map(product => {
+            const stock = Number(product.stock || 0);
+
+            return (
+              <div className={`critical-row ${stock === 0 ? "sold-out" : ""}`} key={product.name}>
+                <div>
+                  <strong>{product.name}</strong>
+                  <span>{product.category || "Kategorisiz"}</span>
+                </div>
+                <b>{stock} stok</b>
+                <em>{formatPrice(product.price)}</em>
+                <small>{stock === 0 ? "Tükendi" : "Kritik"}</small>
+              </div>
+            );
+          })}
         </section>
       </div>
     );
