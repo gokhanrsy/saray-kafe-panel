@@ -76,6 +76,36 @@ async function findPendingOrderByTable(tableName) {
   ) || null;
 }
 
+async function clearOrder(orderId) {
+  const { error: itemsError } = await supabase
+    .from("order_items")
+    .delete()
+    .eq("order_id", orderId);
+
+  if (itemsError) {
+    console.error(itemsError);
+    setStatus("Siparis urunleri silinemedi.");
+    return false;
+  }
+
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({
+      total_price: 0,
+      paid: false,
+      status: "cancelled"
+    })
+    .eq("id", orderId);
+
+  if (orderError) {
+    console.error(orderError);
+    setStatus("Siparis kapatilamadi.");
+    return false;
+  }
+
+  return true;
+}
+
   const categories = useMemo(() => {
     const list = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
     return ["Tümü", ...list];
@@ -161,7 +191,7 @@ async function findPendingOrderByTable(tableName) {
   }
 
   async function saveOrder(markPaid = false) {
-  if (!selectedTable || cartItems.length === 0) {
+  if (!selectedTable) {
     setStatus("Önce masa ve ürün seç.");
     return;
   }
@@ -170,6 +200,30 @@ async function findPendingOrderByTable(tableName) {
 
   let orderId = currentOrderId;
   let orderWasPending = Boolean(orderId);
+
+  if (cartItems.length === 0) {
+    if (!orderId) {
+      const existingOrder = await findPendingOrderByTable(selectedTable);
+      orderId = existingOrder?.id;
+    }
+
+    if (!orderId) {
+      setStatus("Once masa ve urun sec.");
+      return;
+    }
+
+    const cleared = await clearOrder(orderId);
+
+    if (!cleared) return;
+
+    setCart({});
+    setCurrentOrderId(null);
+    setSelectedTable(null);
+    setStatus("");
+    await loadOpenOrders();
+    setScreen("tables");
+    return;
+  }
 
   if (!orderId) {
     const existingOrder = await findPendingOrderByTable(selectedTable);
