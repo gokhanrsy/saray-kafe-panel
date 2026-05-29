@@ -9,6 +9,8 @@ const TABLES = [
   "Masa 5", "Masa 6", "Paket", "Gel Al"
 ];
 
+const normalizeTableName = value => value?.trim().toLowerCase();
+
 function App() {
   const [screen, setScreen] = useState("tables");
   const [selectedTable, setSelectedTable] = useState(null);
@@ -55,6 +57,25 @@ async function loadOpenOrders() {
   setOpenOrders(data || []);
 }
 
+async function findPendingOrderByTable(tableName) {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("status", "pending");
+
+  if (error) {
+    console.error(error);
+    return null;
+  }
+
+  const orders = data || [];
+  setOpenOrders(orders);
+
+  return orders.find(
+    order => normalizeTableName(order.table_name) === normalizeTableName(tableName)
+  ) || null;
+}
+
   const categories = useMemo(() => {
     const list = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
     return ["Tümü", ...list];
@@ -72,16 +93,10 @@ async function loadOpenOrders() {
   }, [cartItems]);
 
   async function openOrder(tableName) {
-    console.log("OPEN ORDERS", openOrders);
-console.log("TABLE", tableName);
   setSelectedTable(tableName);
   setStatus("");
 
-  const existingOrder = openOrders.find(
-  o =>
-    o.table_name?.trim().toLowerCase() ===
-    tableName?.trim().toLowerCase()
-);
+  const existingOrder = await findPendingOrderByTable(tableName);
 
   if (!existingOrder) {
     setCurrentOrderId(null);
@@ -154,6 +169,17 @@ console.log("TABLE", tableName);
   setStatus("Kaydediliyor...");
 
   let orderId = currentOrderId;
+  let orderWasPending = Boolean(orderId);
+
+  if (!orderId) {
+    const existingOrder = await findPendingOrderByTable(selectedTable);
+
+    if (existingOrder) {
+      orderId = existingOrder.id;
+      orderWasPending = true;
+      setCurrentOrderId(orderId);
+    }
+  }
 
   if (!orderId) {
     const { data: newOrder, error: orderError } = await supabase
@@ -190,7 +216,9 @@ console.log("TABLE", tableName);
       setStatus("Sipariş güncellenemedi.");
       return;
     }
+  }
 
+  if (orderWasPending) {
     await supabase
       .from("order_items")
       .delete()
