@@ -1082,49 +1082,76 @@ async function clearOrder(orderId) {
             <h1>Saray Kafe Yönetim Paneli</h1>
             <p>Masa, paket ve gel-al sipariş takibi</p>
           </div>
-          <div className="topbar-actions">
-            <button className="report-button" onClick={loadEndOfDayReport} disabled={reportLoading}>
-              <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu Raporu"}
-            </button>
-            <button className="manage-button" onClick={() => setScreen("products")}>
-              <Boxes size={18} /> Ürün Yönetimi
-            </button>
-            <button className="stock-button" onClick={() => setScreen("stock-entry")}>
-              Stok Girişi
-            </button>
+          <div className="topbar-actions grouped-actions">
+            <div className="action-group">
+              <span>Raporlar</span>
+              <button className="report-button" onClick={loadEndOfDayReport} disabled={reportLoading}>
+                <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu"}
+              </button>
+            </div>
+            <div className="action-group">
+              <span>Yönetim</span>
+              <button className="manage-button" onClick={() => setScreen("products")}>
+                <Boxes size={18} /> Ürünler
+              </button>
+            </div>
+            <div className="action-group">
+              <span>Stok</span>
+              <button className="stock-button" onClick={() => setScreen("stock-entry")}>
+                Stok Girişi
+              </button>
+            </div>
             <button className="logout-button" onClick={logout}>Çıkış Yap</button>
-            <ClipboardList size={34} />
+            <ClipboardList className="brand-mark" size={34} />
           </div>
         </header>
 
-        <section className="table-grid">
-          {TABLES.map(t => {
-            const pendingOrder = pendingOrdersByTable[normalizeTableName(t)];
-            const isOpen = Boolean(pendingOrder);
-            const emptyClass = t.includes("Paket")
-              ? "purple"
-              : t.includes("Gel")
-                ? "teal"
-                : "empty";
+        <main className="dashboard-shell">
+          <section className="dashboard-main">
+            <div className="section-title">
+              <div>
+                <h2>Masalar</h2>
+                <p>Canlı adisyon durumları</p>
+              </div>
+            </div>
 
-            return (
-              <button key={t} className={`table-card ${isOpen ? "open" : emptyClass}`} onClick={() => openOrder(t)}>
-              {t.includes("Paket") ? <Package /> : t.includes("Gel") ? <ShoppingBag /> : <Coffee />}
-                <strong>{t}</strong>
-                <span>{isOpen ? "Açık Hesap" : "Boş Masa"}</span>
-                {isOpen && <b className="table-total">{formatPrice(pendingOrder.total_price)}</b>}
+            <section className="table-grid">
+              {TABLES.map(t => {
+                const pendingOrder = pendingOrdersByTable[normalizeTableName(t)];
+                const isOpen = Boolean(pendingOrder);
+                const emptyClass = t.includes("Paket")
+                  ? "purple"
+                  : t.includes("Gel")
+                    ? "teal"
+                    : "empty";
+
+                return (
+                  <button key={t} className={`table-card ${isOpen ? "open" : emptyClass}`} onClick={() => openOrder(t)}>
+                    <div className="table-card-top">
+                      <span className="table-icon">{t.includes("Paket") ? <Package /> : t.includes("Gel") ? <ShoppingBag /> : <Coffee />}</span>
+                      <span className="table-state">{isOpen ? "Açık" : "Boş"}</span>
+                    </div>
+                    <div className="table-card-body">
+                      <strong>{t}</strong>
+                      <span>{isOpen ? "Açık Hesap" : "Boş Masa"}</span>
+                    </div>
+                    {isOpen && <b className="table-total">{formatPrice(pendingOrder.total_price)}</b>}
+                  </button>
+                );
+              })}
+            </section>
+          </section>
+
+          <aside className="dashboard-side">
+            <section className="stats">
+              <div><b>{products.length}</b><span>Ürün</span></div>
+              <button className="stat-card" onClick={() => setScreen("critical-stock")}>
+                <b>{criticalStockProducts.length}</b><span>Kritik Stok</span>
               </button>
-            );
-          })}
-        </section>
-
-        <section className="stats">
-          <div><b>{products.length}</b><span>Ürün</span></div>
-          <button className="stat-card" onClick={() => setScreen("critical-stock")}>
-            <b>{criticalStockProducts.length}</b><span>Kritik Stok</span>
-          </button>
-          <div><b>Hazır</b><span>Sistem</span></div>
-        </section>
+              <div><b>Hazır</b><span>Sistem</span></div>
+            </section>
+          </aside>
+        </main>
 
         {report && (
           <section className="report-panel">
