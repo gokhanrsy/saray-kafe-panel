@@ -371,9 +371,14 @@ async function clearOrder(orderId) {
           {TABLES.map(t => {
             const pendingOrder = pendingOrdersByTable[normalizeTableName(t)];
             const isOpen = Boolean(pendingOrder);
+            const emptyClass = t.includes("Paket")
+              ? "purple"
+              : t.includes("Gel")
+                ? "green"
+                : "empty";
 
             return (
-              <button key={t} className={`table-card ${isOpen ? "open" : "empty"}`} onClick={() => openOrder(t)}>
+              <button key={t} className={`table-card ${isOpen ? "open" : emptyClass}`} onClick={() => openOrder(t)}>
               {t.includes("Paket") ? <Package /> : t.includes("Gel") ? <ShoppingBag /> : <Coffee />}
                 <strong>{t}</strong>
                 <span>{isOpen ? "Açık Hesap" : "Boş Masa"}</span>
