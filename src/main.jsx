@@ -11,6 +11,8 @@ const TABLES = [
 
 const normalizeTableName = value => value?.trim().toLowerCase();
 
+const formatPrice = value => `${Number(value || 0)} ₺`;
+
 function App() {
   const [screen, setScreen] = useState("tables");
   const [selectedTable, setSelectedTable] = useState(null);
@@ -26,6 +28,22 @@ function App() {
   loadProducts();
   loadOpenOrders();
 }, []);
+
+  useEffect(() => {
+  const channel = supabase
+    .channel("orders-status")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      () => loadOpenOrders()
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
+
   async function loadProducts() {
   const { data, error } = await supabase
     .from("products")
@@ -121,6 +139,13 @@ async function clearOrder(orderId) {
   const total = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
+
+  const pendingOrdersByTable = useMemo(() => {
+    return openOrders.reduce((ordersByTable, order) => {
+      ordersByTable[normalizeTableName(order.table_name)] = order;
+      return ordersByTable;
+    }, {});
+  }, [openOrders]);
 
   async function openOrder(tableName) {
   setSelectedTable(tableName);
@@ -343,13 +368,19 @@ async function clearOrder(orderId) {
         </header>
 
         <section className="table-grid">
-          {TABLES.map(t => (
-            <button key={t} className={`table-card ${t.includes("Paket") ? "purple" : t.includes("Gel") ? "green" : ""}`} onClick={() => openOrder(t)}>
+          {TABLES.map(t => {
+            const pendingOrder = pendingOrdersByTable[normalizeTableName(t)];
+            const isOpen = Boolean(pendingOrder);
+
+            return (
+              <button key={t} className={`table-card ${isOpen ? "open" : "empty"}`} onClick={() => openOrder(t)}>
               {t.includes("Paket") ? <Package /> : t.includes("Gel") ? <ShoppingBag /> : <Coffee />}
-              <strong>{t}</strong>
-              <span>Yeni sipariş</span>
-            </button>
-          ))}
+                <strong>{t}</strong>
+                <span>{isOpen ? "Açık Hesap" : "Boş Masa"}</span>
+                {isOpen && <b className="table-total">{formatPrice(pendingOrder.total_price)}</b>}
+              </button>
+            );
+          })}
         </section>
 
         <section className="stats">
