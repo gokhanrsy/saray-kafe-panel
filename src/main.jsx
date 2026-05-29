@@ -589,8 +589,13 @@ async function clearOrder(orderId) {
     return itemsByName;
   }, {});
 
-  const nextCart = {};
-  let remainingTotal = 0;
+  const splitPaymentPayload = selectedItems.map(([productName, quantity]) => ({
+    productName,
+    selectedQuantity: Number(quantity || 0),
+    currentQuantity: Number(latestItemsByName[productName]?.quantity || 0)
+  }));
+
+  console.log("Selected split payment payload", splitPaymentPayload);
 
   for (const item of cartItems) {
     const latestItem = latestItemsByName[item.name];
@@ -603,6 +608,8 @@ async function clearOrder(orderId) {
     const remainingQuantity = Number(latestItem.quantity || 0) - paidQuantity;
     const unitPrice = Number(latestItem.unit_price || item.price || 0);
     const remainingLineTotal = unitPrice * remainingQuantity;
+
+    if (paidQuantity <= 0) continue;
 
     if (remainingQuantity <= 0) {
       const { error: deleteError } = await supabase
@@ -631,15 +638,41 @@ async function clearOrder(orderId) {
         setStatus("Adisyon ürünü güncellenemedi.");
         return;
       }
-
-      remainingTotal += remainingLineTotal;
-      nextCart[item.name] = {
-        ...item,
-        quantity: remainingQuantity,
-        price: unitPrice
-      };
     }
   }
+
+  const { data: remainingItems, error: remainingItemsError } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("order_id", currentOrderId);
+
+  if (remainingItemsError) {
+    console.error(remainingItemsError);
+    setStatus("Kalan adisyon ürünleri alınamadı.");
+    return;
+  }
+
+  console.log("Updated remaining split items", remainingItems || []);
+
+  const nextCart = {};
+  const remainingTotal = (remainingItems || []).reduce((sum, item) => {
+    const unitPrice = Number(item.unit_price || 0);
+    const quantity = Number(item.quantity || 0);
+
+    if (quantity > 0) {
+      nextCart[item.product_name] = {
+        name: item.product_name,
+        price: unitPrice,
+        quantity,
+        product: {
+          name: item.product_name,
+          price: unitPrice
+        }
+      };
+    }
+
+    return sum + Number(item.total_price || unitPrice * quantity);
+  }, 0);
 
   const allPaid = remainingTotal <= 0;
   const { error: orderError } = await supabase
@@ -666,6 +699,7 @@ async function clearOrder(orderId) {
     setCurrentOrderId(null);
     setIsCurrentOrderPending(false);
     setSelectedTable(null);
+    setMobileCartOpen(false);
     setStatus("");
     await loadOpenOrders();
     setScreen("tables");
