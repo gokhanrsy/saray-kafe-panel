@@ -19,6 +19,9 @@ function App() {
   const [status, setStatus] = useState("");
   const [category, setCategory] = useState("Tümü");
 
+  const [openOrders, setOpenOrders] = useState([]);
+  const [currentOrderId, setCurrentOrderId] = useState(null);
+
   useEffect(() => {
   loadProducts();
   loadOpenOrders();
@@ -199,6 +202,7 @@ if (orderError) {
 );
 
 await loadOpenOrders();
+    }
 
   if (screen === "tables") {
     return (
