@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3 } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -35,6 +35,17 @@ function App() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const emptyProductForm = {
+    name: "",
+    category: "",
+    price: "",
+    stock: "",
+    active: true
+  };
+  const [editingProductName, setEditingProductName] = useState(null);
+  const [productForm, setProductForm] = useState(emptyProductForm);
+  const [productStatus, setProductStatus] = useState("");
+  const [productSaving, setProductSaving] = useState(false);
 
   function handleLogin(event) {
   event.preventDefault();
@@ -87,7 +98,6 @@ function App() {
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("active", true)
     .order("category", { ascending: true })
     .order("name", { ascending: true });
 
@@ -164,15 +174,21 @@ async function clearOrder(orderId) {
 }
 
   const categories = useMemo(() => {
-    const list = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+    const list = Array.from(new Set(
+      products
+        .filter(product => product.active !== false)
+        .map(product => product.category)
+        .filter(Boolean)
+    ));
     return ["Tümü", ...list];
   }, [products]);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
+    const activeProducts = products.filter(product => product.active !== false);
     const categoryProducts = category === "Tümü"
-      ? products
-      : products.filter(product => product.category === category);
+      ? activeProducts
+      : activeProducts.filter(product => product.category === category);
 
     if (!normalizedSearch) return categoryProducts;
 
@@ -305,6 +321,87 @@ async function clearOrder(orderId) {
       .sort((a, b) => b.total - a.total)
   });
   setReportLoading(false);
+}
+
+  function resetProductForm() {
+  setEditingProductName(null);
+  setProductForm(emptyProductForm);
+  setProductStatus("");
+}
+
+  function editProduct(product) {
+  setEditingProductName(product.name);
+  setProductForm({
+    name: product.name || "",
+    category: product.category || "",
+    price: String(product.price ?? ""),
+    stock: String(product.stock ?? ""),
+    active: product.active !== false
+  });
+  setProductStatus("");
+}
+
+  async function saveProduct(event) {
+  event.preventDefault();
+
+  const name = productForm.name.trim();
+  const categoryName = productForm.category.trim();
+  const price = Number(productForm.price || 0);
+  const stock = Number(productForm.stock || 0);
+
+  if (!name) {
+    setProductStatus("Ürün adı zorunlu.");
+    return;
+  }
+
+  setProductSaving(true);
+  setProductStatus("Kaydediliyor...");
+
+  const payload = {
+    name,
+    category: categoryName,
+    price,
+    stock,
+    active: productForm.active
+  };
+
+  const query = editingProductName
+    ? supabase.from("products").update(payload).eq("name", editingProductName)
+    : supabase.from("products").insert(payload);
+
+  const { error } = await query;
+
+  if (error) {
+    console.error(error);
+    setProductStatus("Ürün kaydedilemedi.");
+    setProductSaving(false);
+    return;
+  }
+
+  await loadProducts();
+  setProductStatus("Ürün kaydedildi.");
+  setProductSaving(false);
+  setEditingProductName(null);
+  setProductForm(emptyProductForm);
+}
+
+  async function toggleProductActive(product) {
+  const nextActive = product.active === false;
+  setProductStatus("Güncelleniyor...");
+
+  const { error } = await supabase
+    .from("products")
+    .update({ active: nextActive })
+    .eq("name", product.name);
+
+  if (error) {
+    console.error(error);
+    setProductStatus("Ürün durumu güncellenemedi.");
+    return;
+  }
+
+  await loadProducts();
+  setProductStatus(nextActive ? "Ürün aktif edildi." : "Ürün pasif edildi.");
 }
 
   async function openOrder(tableName) {
@@ -617,6 +714,9 @@ async function clearOrder(orderId) {
             <button className="report-button" onClick={loadEndOfDayReport} disabled={reportLoading}>
               <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu Raporu"}
             </button>
+            <button className="manage-button" onClick={() => setScreen("products")}>
+              <Boxes size={18} /> Ürün Yönetimi
+            </button>
             <button className="logout-button" onClick={logout}>Çıkış Yap</button>
             <ClipboardList size={34} />
           </div>
@@ -699,6 +799,106 @@ async function clearOrder(orderId) {
             </div>
           </section>
         )}
+      </div>
+    );
+  }
+
+  if (screen === "products") {
+    return (
+      <div className="app product-management">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>Ürün Yönetimi</h1>
+            <p>Menü, fiyat, stok ve aktiflik ayarları</p>
+          </div>
+        </header>
+
+        <section className="product-admin-layout">
+          <form className="product-form" onSubmit={saveProduct}>
+            <h2>{editingProductName ? "Ürünü Düzenle" : "Yeni Ürün"}</h2>
+
+            <label>
+              Ürün adı
+              <input
+                value={productForm.name}
+                onChange={event => setProductForm(prev => ({ ...prev, name: event.target.value }))}
+                placeholder="Örn. Türk Kahvesi"
+              />
+            </label>
+
+            <label>
+              Kategori
+              <input
+                value={productForm.category}
+                onChange={event => setProductForm(prev => ({ ...prev, category: event.target.value }))}
+                placeholder="Örn. İçecek"
+              />
+            </label>
+
+            <div className="form-grid">
+              <label>
+                Fiyat
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={productForm.price}
+                  onChange={event => setProductForm(prev => ({ ...prev, price: event.target.value }))}
+                />
+              </label>
+
+              <label>
+                Stok
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={productForm.stock}
+                  onChange={event => setProductForm(prev => ({ ...prev, stock: event.target.value }))}
+                />
+              </label>
+            </div>
+
+            <label className="switch-row">
+              <input
+                type="checkbox"
+                checked={productForm.active}
+                onChange={event => setProductForm(prev => ({ ...prev, active: event.target.checked }))}
+              />
+              Aktif ürün
+            </label>
+
+            {productStatus && <p className="status">{productStatus}</p>}
+
+            <div className="form-actions">
+              <button type="submit" disabled={productSaving}>
+                <Save size={18} /> {productSaving ? "Kaydediliyor" : "Kaydet"}
+              </button>
+              <button type="button" onClick={resetProductForm}>Temizle</button>
+            </div>
+          </form>
+
+          <section className="product-admin-list">
+            {products.map(product => (
+              <div className={`product-row ${product.active === false ? "inactive" : ""}`} key={product.name}>
+                <div>
+                  <strong>{product.name}</strong>
+                  <span>{product.category || "Kategorisiz"}</span>
+                </div>
+                <b>{formatPrice(product.price)}</b>
+                <em>{Number(product.stock || 0)} stok</em>
+                <small>{product.active === false ? "Pasif" : "Aktif"}</small>
+                <div className="product-row-actions">
+                  <button onClick={() => editProduct(product)}>Düzenle</button>
+                  <button onClick={() => toggleProductActive(product)}>
+                    {product.active === false ? "Aktif Yap" : "Pasif Yap"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        </section>
       </div>
     );
   }
