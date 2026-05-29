@@ -5,8 +5,6 @@ import { supabase } from "./supabaseClient";
 import "./style.css";
 
 const TABLES = [
-  const [openOrders, setOpenOrders] = useState([]);
-const [currentOrderId, setCurrentOrderId] = useState(null);
   "Masa 1", "Masa 2", "Masa 3", "Masa 4",
   "Masa 5", "Masa 6", "Paket", "Gel Al"
 ];
