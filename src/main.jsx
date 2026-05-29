@@ -133,21 +133,21 @@ async function loadOpenOrders() {
     setStatus("Kaydediliyor...");
 
     const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-        table_name: selectedTable,
-        total_price: total,
-        paid: markPaid,
-        status: markPaid ? "completed" : "pending"
-      })
-      .select()
-      .single();
+  .from("orders")
+  .insert({
+    table_name: selectedTable,
+    total_price: total,
+    paid: markPaid,
+    status: markPaid ? "completed" : "pending"
+  })
+  .select()
+  .single();
 
-    if (orderError) {
-      console.error(orderError);
-      setStatus("Sipariş kaydedilemedi.");
-      return;
-    }
+if (orderError) {
+  console.error(orderError);
+  setStatus("Sipariş kaydedilemedi.");
+  return;
+}
 
     const rows = cartItems.map(item => ({
       order_id: order.id,
@@ -188,9 +188,13 @@ async function loadOpenOrders() {
       await loadProducts();
     }
 
-    setStatus(markPaid ? "Ödeme alındı. Sipariş tamamlandı." : "Sipariş kaydedildi.");
-    setCart({});
-  }
+    setStatus(
+  markPaid
+    ? "Ödeme alındı. Sipariş tamamlandı."
+    : "Sipariş kaydedildi."
+);
+
+await loadOpenOrders();
 
   if (screen === "tables") {
     return (
