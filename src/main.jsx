@@ -5,6 +5,8 @@ import { supabase } from "./supabaseClient";
 import "./style.css";
 
 const TABLES = [
+  const [openOrders, setOpenOrders] = useState([]);
+const [currentOrderId, setCurrentOrderId] = useState(null);
   "Masa 1", "Masa 2", "Masa 3", "Masa 4",
   "Masa 5", "Masa 6", "Paket", "Gel Al"
 ];
@@ -18,24 +20,23 @@ function App() {
   const [category, setCategory] = useState("Tümü");
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+  loadProducts();
+  loadOpenOrders();
+}, []);
 
-  async function loadProducts() {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("active", true)
-      .order("category", { ascending: true })
-      .order("name", { ascending: true });
+async function loadOpenOrders() {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("status", "pending");
 
-    if (error) {
-      setStatus("Ürünler alınamadı. Supabase ayarlarını kontrol et.");
-      console.error(error);
-      return;
-    }
-    setProducts(data || []);
+  if (error) {
+    console.error(error);
+    return;
   }
+
+  setOpenOrders(data || []);
+}
 
   const categories = useMemo(() => {
     const list = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
@@ -53,12 +54,49 @@ function App() {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
 
-  function openOrder(tableName) {
-    setSelectedTable(tableName);
+  async function openOrder(tableName) {
+  setSelectedTable(tableName);
+  setStatus("");
+
+  const existingOrder = openOrders.find(
+    o => o.table_name === tableName
+  );
+
+  if (!existingOrder) {
+    setCurrentOrderId(null);
     setCart({});
-    setStatus("");
     setScreen("order");
+    return;
   }
+
+  const { data: items, error } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("order_id", existingOrder.id);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const restoredCart = {};
+
+  items.forEach(item => {
+    restoredCart[item.product_name] = {
+      name: item.product_name,
+      price: Number(item.unit_price),
+      quantity: item.quantity,
+      product: {
+        name: item.product_name,
+        price: item.unit_price
+      }
+    };
+  });
+
+  setCurrentOrderId(existingOrder.id);
+  setCart(restoredCart);
+  setScreen("order");
+}
 
   function addProduct(product) {
     setCart(prev => {
