@@ -57,6 +57,29 @@ button{font-family:inherit; cursor:pointer}
 .topbar h1{margin:0;font-size:28px}
 .topbar p{margin:6px 0 0;color:var(--muted)}
 
+.topbar-actions{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+
+.report-button{
+  border:0;
+  border-radius:16px;
+  padding:13px 16px;
+  color:#111;
+  background:var(--gold);
+  font-weight:900;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.report-button:disabled{
+  cursor:wait;
+  opacity:.72;
+}
+
 .back{
   width:50px;
   height:50px;
@@ -123,6 +146,102 @@ button{font-family:inherit; cursor:pointer}
 
 .stats b{display:block;font-size:26px;color:var(--gold)}
 .stats span{color:var(--muted)}
+
+.report-panel{
+  margin-top:22px;
+  background:rgba(23,29,34,.94);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:24px;
+  padding:20px;
+  box-shadow:0 18px 45px rgba(0,0,0,.24);
+}
+
+.report-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+
+.report-head h2{
+  margin:0;
+  font-size:24px;
+}
+
+.report-head p{
+  margin:6px 0 0;
+  color:var(--muted);
+}
+
+.report-head button{
+  border:0;
+  border-radius:12px;
+  padding:10px 14px;
+  background:var(--panel2);
+  color:var(--text);
+  font-weight:800;
+}
+
+.report-summary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+
+.report-summary div{
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;
+  padding:16px;
+  background:rgba(255,255,255,.04);
+}
+
+.report-summary span{
+  display:block;
+  color:var(--muted);
+  margin-bottom:8px;
+}
+
+.report-summary strong{
+  font-size:28px;
+  color:var(--gold);
+}
+
+.report-lists{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+  margin-top:18px;
+}
+
+.report-lists h3{
+  margin:0 0 10px;
+  font-size:18px;
+}
+
+.report-line{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:12px 0;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.report-line span{
+  color:var(--text);
+}
+
+.report-line small{
+  display:block;
+  color:var(--muted);
+  margin-top:3px;
+}
+
+.report-line b{
+  color:var(--gold);
+  white-space:nowrap;
+}
 
 .order-layout .topbar{justify-content:flex-start}
 
@@ -344,12 +463,17 @@ button{font-family:inherit; cursor:pointer}
 
 @media(max-width:900px){
   .table-grid{grid-template-columns:repeat(2,1fr)}
+  .topbar-actions{align-items:flex-end;flex-direction:column}
+  .report-summary{grid-template-columns:1fr}
+  .report-lists{grid-template-columns:1fr}
   .order-main{grid-template-columns:1fr}
   .cart{position:static}
 }
 
 @media(max-width:560px){
   .app{padding:14px}
+  .topbar{align-items:flex-start}
+  .report-button{width:100%;justify-content:center}
   .products{grid-template-columns:1fr}
   .table-grid{grid-template-columns:1fr 1fr}
   .table-card{min-height:125px}

@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -26,6 +26,8 @@ function App() {
   const [currentOrderId, setCurrentOrderId] = useState(null);
   const [isCurrentOrderPending, setIsCurrentOrderPending] = useState(false);
   const [transferMode, setTransferMode] = useState(false);
+  const [report, setReport] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   useEffect(() => {
   loadProducts();
@@ -165,6 +167,111 @@ async function clearOrder(orderId) {
       !pendingOrdersByTable[normalizeTableName(tableName)]
     );
   }, [pendingOrdersByTable, selectedTable]);
+
+  const productCategoriesByName = useMemo(() => {
+    return products.reduce((categoriesByName, product) => {
+      categoriesByName[product.name] = product.category || "Diğer";
+      return categoriesByName;
+    }, {});
+  }, [products]);
+
+  function getTodayRange() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    return {
+      start: start.toISOString(),
+      end: end.toISOString(),
+      label: start.toLocaleDateString("tr-TR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      })
+    };
+  }
+
+  async function loadEndOfDayReport() {
+  setReportLoading(true);
+  setStatus("");
+
+  const today = getTodayRange();
+  const { data: orders, error: ordersError } = await supabase
+    .from("orders")
+    .select("id,total_price,created_at")
+    .eq("status", "completed")
+    .eq("paid", true)
+    .gte("created_at", today.start)
+    .lt("created_at", today.end);
+
+  if (ordersError) {
+    console.error(ordersError);
+    setStatus("Gün sonu raporu alınamadı.");
+    setReportLoading(false);
+    return;
+  }
+
+  const completedOrders = orders || [];
+  const orderIds = completedOrders.map(order => order.id);
+  let items = [];
+
+  if (orderIds.length > 0) {
+    const { data: orderItems, error: itemsError } = await supabase
+      .from("order_items")
+      .select("product_name,quantity,total_price,unit_price,order_id")
+      .in("order_id", orderIds);
+
+    if (itemsError) {
+      console.error(itemsError);
+      setStatus("Gün sonu ürünleri alınamadı.");
+      setReportLoading(false);
+      return;
+    }
+
+    items = orderItems || [];
+  }
+
+  const productSales = {};
+  const categorySales = {};
+  const totalRevenue = completedOrders.reduce(
+    (sum, order) => sum + Number(order.total_price || 0),
+    0
+  );
+  const totalItems = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+  items.forEach(item => {
+    const productName = item.product_name || "Bilinmeyen Ürün";
+    const quantity = Number(item.quantity || 0);
+    const itemTotal = Number(item.total_price || 0);
+    const category = productCategoriesByName[productName] || "Diğer";
+
+    if (!productSales[productName]) {
+      productSales[productName] = {
+        name: productName,
+        quantity: 0,
+        total: 0
+      };
+    }
+
+    productSales[productName].quantity += quantity;
+    productSales[productName].total += itemTotal;
+    categorySales[category] = (categorySales[category] || 0) + itemTotal;
+  });
+
+  setReport({
+    dateLabel: today.label,
+    totalRevenue,
+    completedOrderCount: completedOrders.length,
+    totalItems,
+    topProducts: Object.values(productSales)
+      .sort((a, b) => b.quantity - a.quantity || b.total - a.total)
+      .slice(0, 5),
+    categoryTotals: Object.entries(categorySales)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+  });
+  setReportLoading(false);
+}
 
   async function openOrder(tableName) {
   setSelectedTable(tableName);
@@ -442,7 +549,12 @@ async function clearOrder(orderId) {
             <h1>Saray Kafe Yönetim Paneli</h1>
             <p>Masa, paket ve gel-al sipariş takibi</p>
           </div>
-          <ClipboardList size={34} />
+          <div className="topbar-actions">
+            <button className="report-button" onClick={loadEndOfDayReport} disabled={reportLoading}>
+              <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu Raporu"}
+            </button>
+            <ClipboardList size={34} />
+          </div>
         </header>
 
         <section className="table-grid">
@@ -471,6 +583,57 @@ async function clearOrder(orderId) {
           <div><b>{products.filter(p => Number(p.stock) <= 5).length}</b><span>Kritik Stok</span></div>
           <div><b>Hazır</b><span>Sistem</span></div>
         </section>
+
+        {report && (
+          <section className="report-panel">
+            <div className="report-head">
+              <div>
+                <h2>Gün Sonu Raporu</h2>
+                <p>{report.dateLabel}</p>
+              </div>
+              <button onClick={() => setReport(null)}>Kapat</button>
+            </div>
+
+            <div className="report-summary">
+              <div>
+                <span>Toplam Ciro</span>
+                <strong>{formatPrice(report.totalRevenue)}</strong>
+              </div>
+              <div>
+                <span>Tamamlanan Sipariş</span>
+                <strong>{report.completedOrderCount}</strong>
+              </div>
+              <div>
+                <span>Satılan Ürün</span>
+                <strong>{report.totalItems}</strong>
+              </div>
+            </div>
+
+            <div className="report-lists">
+              <div>
+                <h3>En Çok Satan Ürünler</h3>
+                {report.topProducts.length === 0 && <p className="empty">Bugün tamamlanan satış yok.</p>}
+                {report.topProducts.map(product => (
+                  <div className="report-line" key={product.name}>
+                    <span>{product.name}<small>{product.quantity} adet</small></span>
+                    <b>{formatPrice(product.total)}</b>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <h3>Kategori Bazlı Satış</h3>
+                {report.categoryTotals.length === 0 && <p className="empty">Kategori satışı yok.</p>}
+                {report.categoryTotals.map(categoryTotal => (
+                  <div className="report-line" key={categoryTotal.name}>
+                    <span>{categoryTotal.name}</span>
+                    <b>{formatPrice(categoryTotal.total)}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     );
   }
