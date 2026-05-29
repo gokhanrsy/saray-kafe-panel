@@ -702,7 +702,7 @@ button{font-family:inherit; cursor:pointer}
   border-radius:14px;
 }
 
-.save,.pay,.transfer{
+.save,.pay,.transfer,.split-toggle,.split-pay{
   width:100%;
   border:0;
   border-radius:16px;
@@ -719,9 +719,105 @@ button{font-family:inherit; cursor:pointer}
 .save{background:#33404b}
 .pay{background:var(--green)}
 .transfer{background:#2b5260}
+.split-toggle{background:#4a3a66}
+.split-pay{background:var(--gold);color:#111}
 
 .transfer-panel{
   margin-bottom:4px;
+}
+
+.split-panel{
+  margin-bottom:4px;
+}
+
+.split-content{
+  margin-top:10px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+}
+
+.split-tabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.split-tabs button{
+  border:0;
+  border-radius:12px;
+  padding:11px;
+  color:var(--text);
+  background:var(--panel2);
+  font-weight:800;
+}
+
+.split-tabs button.active{
+  color:#111;
+  background:var(--gold);
+}
+
+.equal-split{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  align-items:end;
+}
+
+.equal-split label{
+  color:var(--muted);
+  font-weight:700;
+}
+
+.equal-split input,
+.split-line input{
+  width:100%;
+  min-height:42px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  outline:0;
+  color:var(--text);
+  background:var(--panel2);
+  padding:0 10px;
+  margin-top:6px;
+}
+
+.equal-split span,
+.split-total span,
+.split-line span{
+  display:block;
+  color:var(--muted);
+}
+
+.equal-split strong,
+.split-total strong{
+  display:block;
+  color:var(--gold);
+  font-size:22px;
+  margin-top:4px;
+}
+
+.split-line{
+  display:grid;
+  grid-template-columns:1fr 82px;
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.split-line strong{
+  display:block;
+}
+
+.split-total{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  margin:14px 0 4px;
 }
 
 .transfer-targets{
@@ -780,6 +876,7 @@ button{font-family:inherit; cursor:pointer}
   .report-button{width:100%;justify-content:center}
   .manage-button,.logout-button{width:100%;justify-content:center}
   .form-grid,.form-actions,.product-row-actions{grid-template-columns:1fr}
+  .equal-split,.split-tabs{grid-template-columns:1fr}
   .products{grid-template-columns:1fr}
   .table-grid{grid-template-columns:1fr 1fr}
   .table-card{min-height:125px}

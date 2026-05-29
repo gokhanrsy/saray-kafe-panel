@@ -32,6 +32,10 @@ function App() {
   const [currentOrderId, setCurrentOrderId] = useState(null);
   const [isCurrentOrderPending, setIsCurrentOrderPending] = useState(false);
   const [transferMode, setTransferMode] = useState(false);
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitType, setSplitType] = useState("equal");
+  const [splitPeople, setSplitPeople] = useState(2);
+  const [splitSelections, setSplitSelections] = useState({});
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -203,6 +207,13 @@ async function clearOrder(orderId) {
   const total = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
+
+  const splitSelectedTotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const selectedQuantity = Number(splitSelections[item.name] || 0);
+      return sum + item.price * selectedQuantity;
+    }, 0);
+  }, [cartItems, splitSelections]);
 
   const pendingOrdersByTable = useMemo(() => {
     return openOrders.reduce((ordersByTable, order) => {
@@ -415,6 +426,8 @@ async function clearOrder(orderId) {
   setStatus("");
   setSearchTerm("");
   setTransferMode(false);
+  setSplitMode(false);
+  setSplitSelections({});
   setMobileCartOpen(false);
 
   const existingOrder = await findPendingOrderByTable(tableName);
@@ -527,10 +540,141 @@ async function clearOrder(orderId) {
   setIsCurrentOrderPending(false);
   setSelectedTable(null);
   setTransferMode(false);
+  setSplitMode(false);
+  setSplitSelections({});
   setMobileCartOpen(false);
   setStatus("");
   await loadOpenOrders();
   setScreen("tables");
+}
+
+  function setSplitItemQuantity(item, quantity) {
+  const safeQuantity = Math.max(0, Math.min(Number(quantity || 0), item.quantity));
+
+  setSplitSelections(prev => ({
+    ...prev,
+    [item.name]: safeQuantity
+  }));
+}
+
+  async function paySelectedSplitItems() {
+  if (!currentOrderId || !isCurrentOrderPending) {
+    setStatus("Sadece açık hesaplar bölünebilir.");
+    return;
+  }
+
+  const selectedItems = Object.entries(splitSelections)
+    .filter(([, quantity]) => Number(quantity || 0) > 0);
+
+  if (selectedItems.length === 0) {
+    setStatus("Ödenecek ürün seç.");
+    return;
+  }
+
+  setStatus("Seçilenler ödeniyor...");
+
+  const { data: latestItems, error: itemsError } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("order_id", currentOrderId);
+
+  if (itemsError) {
+    console.error(itemsError);
+    setStatus("Adisyon ürünleri alınamadı.");
+    return;
+  }
+
+  const latestItemsByName = (latestItems || []).reduce((itemsByName, item) => {
+    itemsByName[item.product_name] = item;
+    return itemsByName;
+  }, {});
+
+  const nextCart = {};
+  let remainingTotal = 0;
+
+  for (const item of cartItems) {
+    const latestItem = latestItemsByName[item.name];
+    if (!latestItem) continue;
+
+    const paidQuantity = Math.min(
+      Number(splitSelections[item.name] || 0),
+      Number(latestItem.quantity || 0)
+    );
+    const remainingQuantity = Number(latestItem.quantity || 0) - paidQuantity;
+    const unitPrice = Number(latestItem.unit_price || item.price || 0);
+    const remainingLineTotal = unitPrice * remainingQuantity;
+
+    if (remainingQuantity <= 0) {
+      const { error: deleteError } = await supabase
+        .from("order_items")
+        .delete()
+        .eq("order_id", currentOrderId)
+        .eq("product_name", item.name);
+
+      if (deleteError) {
+        console.error(deleteError);
+        setStatus("Ödenen ürün silinemedi.");
+        return;
+      }
+    } else {
+      const { error: updateItemError } = await supabase
+        .from("order_items")
+        .update({
+          quantity: remainingQuantity,
+          total_price: remainingLineTotal
+        })
+        .eq("order_id", currentOrderId)
+        .eq("product_name", item.name);
+
+      if (updateItemError) {
+        console.error(updateItemError);
+        setStatus("Adisyon ürünü güncellenemedi.");
+        return;
+      }
+
+      remainingTotal += remainingLineTotal;
+      nextCart[item.name] = {
+        ...item,
+        quantity: remainingQuantity,
+        price: unitPrice
+      };
+    }
+  }
+
+  const allPaid = remainingTotal <= 0;
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({
+      total_price: remainingTotal,
+      paid: allPaid,
+      status: allPaid ? "completed" : "pending"
+    })
+    .eq("id", currentOrderId)
+    .eq("status", "pending");
+
+  if (orderError) {
+    console.error(orderError);
+    setStatus("Adisyon güncellenemedi.");
+    return;
+  }
+
+  setSplitSelections({});
+  setSplitMode(false);
+
+  if (allPaid) {
+    setCart({});
+    setCurrentOrderId(null);
+    setIsCurrentOrderPending(false);
+    setSelectedTable(null);
+    setStatus("");
+    await loadOpenOrders();
+    setScreen("tables");
+    return;
+  }
+
+  setCart(nextCart);
+  setStatus("Seçilen ürünler ödendi.");
+  await loadOpenOrders();
 }
 
   async function saveOrder(markPaid = false) {
@@ -564,6 +708,8 @@ async function clearOrder(orderId) {
     setIsCurrentOrderPending(false);
     setSelectedTable(null);
     setTransferMode(false);
+    setSplitMode(false);
+    setSplitSelections({});
     setMobileCartOpen(false);
     setStatus("");
     await loadOpenOrders();
@@ -710,6 +856,8 @@ async function clearOrder(orderId) {
     setCurrentOrderId(null);
     setIsCurrentOrderPending(false);
     setTransferMode(false);
+    setSplitMode(false);
+    setSplitSelections({});
     setMobileCartOpen(false);
 
     await loadProducts();
@@ -1090,6 +1238,74 @@ async function clearOrder(orderId) {
                       {tableName}
                     </button>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isCurrentOrderPending && currentOrderId && (
+            <div className="split-panel">
+              <button className="split-toggle" onClick={() => setSplitMode(prev => !prev)}>
+                Adisyon Böl
+              </button>
+
+              {splitMode && (
+                <div className="split-content">
+                  <div className="split-tabs">
+                    <button className={splitType === "equal" ? "active" : ""} onClick={() => setSplitType("equal")}>
+                      Eşit Böl
+                    </button>
+                    <button className={splitType === "items" ? "active" : ""} onClick={() => setSplitType("items")}>
+                      Ürün Seçerek Öde
+                    </button>
+                  </div>
+
+                  {splitType === "equal" && (
+                    <div className="equal-split">
+                      <label>
+                        Kişi sayısı
+                        <input
+                          type="number"
+                          min="1"
+                          value={splitPeople}
+                          onChange={event => setSplitPeople(Math.max(1, Number(event.target.value || 1)))}
+                        />
+                      </label>
+                      <div>
+                        <span>Kişi başı</span>
+                        <strong>{formatPrice(total / Math.max(1, splitPeople))}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  {splitType === "items" && (
+                    <div className="item-split">
+                      {cartItems.map(item => (
+                        <div className="split-line" key={item.name}>
+                          <div>
+                            <strong>{item.name}</strong>
+                            <span>{item.quantity} adet · {formatPrice(item.price)}</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.quantity}
+                            value={splitSelections[item.name] || 0}
+                            onChange={event => setSplitItemQuantity(item, event.target.value)}
+                          />
+                        </div>
+                      ))}
+
+                      <div className="split-total">
+                        <span>Ödenecek Ara Toplam</span>
+                        <strong>{formatPrice(splitSelectedTotal)}</strong>
+                      </div>
+
+                      <button className="split-pay" onClick={paySelectedSplitItems}>
+                        Seçilenleri Öde
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
