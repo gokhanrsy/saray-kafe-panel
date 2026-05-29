@@ -55,12 +55,16 @@ async function loadOpenOrders() {
   }, [cartItems]);
 
   async function openOrder(tableName) {
+    console.log("OPEN ORDERS", openOrders);
+console.log("TABLE", tableName);
   setSelectedTable(tableName);
   setStatus("");
 
   const existingOrder = openOrders.find(
-    o => o.table_name === tableName
-  );
+  o =>
+    o.table_name?.trim().toLowerCase() ===
+    tableName?.trim().toLowerCase()
+);
 
   if (!existingOrder) {
     setCurrentOrderId(null);
