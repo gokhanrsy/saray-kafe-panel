@@ -146,77 +146,108 @@ console.log("TABLE", tableName);
   }
 
   async function saveOrder(markPaid = false) {
-    if (!selectedTable || cartItems.length === 0) {
-      setStatus("Önce masa ve ürün seç.");
+  if (!selectedTable || cartItems.length === 0) {
+    setStatus("Önce masa ve ürün seç.");
+    return;
+  }
+
+  setStatus("Kaydediliyor...");
+
+  let orderId = currentOrderId;
+
+  if (!orderId) {
+    const { data: newOrder, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        table_name: selectedTable,
+        total_price: total,
+        paid: markPaid,
+        status: markPaid ? "completed" : "pending"
+      })
+      .select()
+      .single();
+
+    if (orderError) {
+      console.error(orderError);
+      setStatus("Sipariş kaydedilemedi.");
       return;
     }
 
-    setStatus("Kaydediliyor...");
+    orderId = newOrder.id;
+    setCurrentOrderId(orderId);
+  } else {
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        total_price: total,
+        paid: markPaid,
+        status: markPaid ? "completed" : "pending"
+      })
+      .eq("id", orderId);
 
-    const { data: order, error: orderError } = await supabase
-  .from("orders")
-  .insert({
-    table_name: selectedTable,
-    total_price: total,
-    paid: markPaid,
-    status: markPaid ? "completed" : "pending"
-  })
-  .select()
-  .single();
+    if (updateError) {
+      console.error(updateError);
+      setStatus("Sipariş güncellenemedi.");
+      return;
+    }
 
-if (orderError) {
-  console.error(orderError);
-  setStatus("Sipariş kaydedilemedi.");
-  return;
-}
-
-    const rows = cartItems.map(item => ({
-      order_id: order.id,
-      product_name: item.name,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity
-    }));
-
-    const { error: itemsError } = await supabase
+    await supabase
       .from("order_items")
-      .insert(rows);
+      .delete()
+      .eq("order_id", orderId);
+  }
 
-    if (itemsError) {
-      console.error(itemsError);
-      setStatus("Sipariş ürünleri kaydedilemedi.");
-      return;
+  const rows = cartItems.map(item => ({
+    order_id: orderId,
+    product_name: item.name,
+    quantity: item.quantity,
+    unit_price: item.price,
+    total_price: item.price * item.quantity
+  }));
+
+  const { error: itemsError } = await supabase
+    .from("order_items")
+    .insert(rows);
+
+  if (itemsError) {
+    console.error(itemsError);
+    setStatus("Sipariş ürünleri kaydedilemedi.");
+    return;
+  }
+
+  if (markPaid) {
+    for (const item of cartItems) {
+      const newStock = Number(item.product.stock || 0) - item.quantity;
+
+      await supabase
+        .from("products")
+        .update({ stock: newStock })
+        .eq("name", item.name);
+
+      await supabase
+        .from("stock_movements")
+        .insert({
+          product_name: item.name,
+          movement_type: "sale",
+          quantity: -item.quantity,
+          note: `${selectedTable} satışı`
+        });
     }
 
-    if (markPaid) {
-      for (const item of cartItems) {
-        const newStock = Number(item.product.stock || 0) - item.quantity;
+    setCart({});
+    setCurrentOrderId(null);
 
-        await supabase
-          .from("products")
-          .update({ stock: newStock })
-          .eq("name", item.name);
+    await loadProducts();
+  }
 
-        await supabase
-          .from("stock_movements")
-          .insert({
-            product_name: item.name,
-            movement_type: "sale",
-            quantity: -item.quantity,
-            note: `${selectedTable} satışı`
-          });
-      }
-      await loadProducts();
-    }
+  setStatus(
+    markPaid
+      ? "Ödeme alındı. Sipariş tamamlandı."
+      : "Sipariş kaydedildi."
+  );
 
-    setStatus(
-  markPaid
-    ? "Ödeme alındı. Sipariş tamamlandı."
-    : "Sipariş kaydedildi."
-);
-
-await loadOpenOrders();
-    }
+  await loadOpenOrders();
+}
 
   if (screen === "tables") {
     return (
