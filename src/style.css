@@ -155,6 +155,15 @@ button{font-family:inherit; cursor:pointer}
   gap:8px;
 }
 
+.stock-button{
+  border:0;
+  border-radius:16px;
+  padding:13px 16px;
+  color:#111;
+  background:#8ee0a6;
+  font-weight:900;
+}
+
 .back{
   width:50px;
   height:50px;
@@ -528,6 +537,62 @@ button{font-family:inherit; cursor:pointer}
   grid-template-columns:1fr;
 }
 
+.stock-entry-list{
+  display:grid;
+  gap:12px;
+  margin-top:14px;
+}
+
+.stock-entry-row{
+  display:grid;
+  grid-template-columns:1.2fr .55fr .55fr 1fr auto;
+  align-items:center;
+  gap:12px;
+  background:rgba(23,29,34,.94);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:20px;
+  padding:16px;
+  box-shadow:0 14px 34px rgba(0,0,0,.22);
+}
+
+.stock-entry-row strong,
+.stock-entry-row span{
+  display:block;
+}
+
+.stock-entry-row span{
+  color:var(--muted);
+  margin-top:5px;
+}
+
+.stock-entry-row b{
+  color:var(--gold);
+}
+
+.stock-entry-row input{
+  min-height:44px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  outline:0;
+  color:var(--text);
+  background:var(--panel2);
+  padding:0 12px;
+}
+
+.stock-entry-row input:focus{
+  border-color:rgba(243,154,34,.75);
+  box-shadow:0 0 0 3px rgba(243,154,34,.12);
+}
+
+.stock-entry-row button{
+  border:0;
+  border-radius:14px;
+  padding:13px 14px;
+  color:#111;
+  background:var(--gold);
+  font-weight:900;
+}
+
 .order-layout .topbar{justify-content:flex-start}
 
 .order-tools{
@@ -895,6 +960,7 @@ button{font-family:inherit; cursor:pointer}
   .product-form{position:static}
   .product-row{grid-template-columns:1fr}
   .critical-row{grid-template-columns:1fr}
+  .stock-entry-row{grid-template-columns:1fr}
   .product-row-actions{display:grid;grid-template-columns:1fr 1fr}
   .order-main{grid-template-columns:1fr}
   .cart{position:static}
@@ -904,7 +970,7 @@ button{font-family:inherit; cursor:pointer}
   .app{padding:14px}
   .topbar{align-items:flex-start}
   .report-button{width:100%;justify-content:center}
-  .manage-button,.logout-button{width:100%;justify-content:center}
+  .manage-button,.stock-button,.logout-button{width:100%;justify-content:center}
   .form-grid,.form-actions,.product-row-actions{grid-template-columns:1fr}
   .equal-split,.split-tabs{grid-template-columns:1fr}
   .products{grid-template-columns:1fr}

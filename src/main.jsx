@@ -51,6 +51,10 @@ function App() {
   const [productForm, setProductForm] = useState(emptyProductForm);
   const [productStatus, setProductStatus] = useState("");
   const [productSaving, setProductSaving] = useState(false);
+  const [stockSearchTerm, setStockSearchTerm] = useState("");
+  const [stockEntryAmounts, setStockEntryAmounts] = useState({});
+  const [stockEntryNotes, setStockEntryNotes] = useState({});
+  const [stockEntryStatus, setStockEntryStatus] = useState("");
 
   function handleLogin(event) {
   event.preventDefault();
@@ -245,6 +249,18 @@ async function clearOrder(orderId) {
       .sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0));
   }, [products]);
 
+  const stockEntryProducts = useMemo(() => {
+    const normalizedSearch = stockSearchTerm.trim().toLowerCase();
+
+    return products
+      .filter(product => product.active !== false)
+      .filter(product =>
+        !normalizedSearch ||
+        product.name?.toLowerCase().includes(normalizedSearch) ||
+        product.category?.toLowerCase().includes(normalizedSearch)
+      );
+  }, [products, stockSearchTerm]);
+
   function getTodayRange() {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -422,6 +438,64 @@ async function clearOrder(orderId) {
 
   await loadProducts();
   setProductStatus(nextActive ? "Ürün aktif edildi." : "Ürün pasif edildi.");
+}
+
+  async function addStock(product) {
+  const quantity = Number(stockEntryAmounts[product.name] || 0);
+  const note = stockEntryNotes[product.name]?.trim() || "Stok girişi";
+
+  if (quantity <= 0) {
+    setStockEntryStatus("Miktar 0'dan büyük olmalı.");
+    return;
+  }
+
+  setStockEntryStatus("Stok güncelleniyor...");
+
+  const { data: currentProduct, error: readError } = await supabase
+    .from("products")
+    .select("name,stock")
+    .eq("name", product.name)
+    .single();
+
+  if (readError) {
+    console.error(readError);
+    setStockEntryStatus("Mevcut stok alınamadı.");
+    return;
+  }
+
+  const currentStock = Number(currentProduct?.stock || 0);
+  const nextStock = currentStock + quantity;
+
+  const { error: updateError } = await supabase
+    .from("products")
+    .update({ stock: nextStock })
+    .eq("name", product.name);
+
+  if (updateError) {
+    console.error(updateError);
+    setStockEntryStatus("Stok güncellenemedi.");
+    return;
+  }
+
+  const { error: movementError } = await supabase
+    .from("stock_movements")
+    .insert({
+      product_name: product.name,
+      movement_type: "purchase",
+      quantity,
+      note
+    });
+
+  if (movementError) {
+    console.error(movementError);
+    setStockEntryStatus("Stok hareketi kaydedilemedi.");
+    return;
+  }
+
+  await loadProducts();
+  setStockEntryAmounts(prev => ({ ...prev, [product.name]: "" }));
+  setStockEntryNotes(prev => ({ ...prev, [product.name]: "" }));
+  setStockEntryStatus(`${product.name} stoğu güncellendi.`);
 }
 
   async function openOrder(tableName) {
@@ -1015,6 +1089,9 @@ async function clearOrder(orderId) {
             <button className="manage-button" onClick={() => setScreen("products")}>
               <Boxes size={18} /> Ürün Yönetimi
             </button>
+            <button className="stock-button" onClick={() => setScreen("stock-entry")}>
+              Stok Girişi
+            </button>
             <button className="logout-button" onClick={logout}>Çıkış Yap</button>
             <ClipboardList size={34} />
           </div>
@@ -1240,6 +1317,66 @@ async function clearOrder(orderId) {
               </div>
             );
           })}
+        </section>
+      </div>
+    );
+  }
+
+  if (screen === "stock-entry") {
+    return (
+      <div className="app stock-entry-page">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>Stok Girişi</h1>
+            <p>Aktif ürünlerin stoklarını güncelleyin</p>
+          </div>
+        </header>
+
+        <div className="order-tools">
+          <label className="search-box">
+            <Search size={18} />
+            <input
+              value={stockSearchTerm}
+              onChange={event => setStockSearchTerm(event.target.value)}
+              placeholder="Ürün ara"
+            />
+          </label>
+        </div>
+
+        {stockEntryStatus && <p className="status">{stockEntryStatus}</p>}
+
+        <section className="stock-entry-list">
+          {stockEntryProducts.length === 0 && (
+            <div className="critical-empty">
+              <strong>Aktif ürün bulunamadı.</strong>
+              <span>Arama kriterini değiştirin veya ürün yönetiminden ürünleri aktif edin.</span>
+            </div>
+          )}
+
+          {stockEntryProducts.map(product => (
+            <div className="stock-entry-row" key={product.name}>
+              <div>
+                <strong>{product.name}</strong>
+                <span>{product.category || "Kategorisiz"}</span>
+              </div>
+              <b>{Number(product.stock || 0)} stok</b>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={stockEntryAmounts[product.name] || ""}
+                onChange={event => setStockEntryAmounts(prev => ({ ...prev, [product.name]: event.target.value }))}
+                placeholder="Miktar"
+              />
+              <input
+                value={stockEntryNotes[product.name] || ""}
+                onChange={event => setStockEntryNotes(prev => ({ ...prev, [product.name]: event.target.value }))}
+                placeholder="Not"
+              />
+              <button onClick={() => addStock(product)}>Stok Ekle</button>
+            </div>
+          ))}
         </section>
       </div>
     );
