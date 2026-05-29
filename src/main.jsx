@@ -757,6 +757,7 @@ async function clearOrder(orderId) {
         <div>
           <span>Toplam</span>
           <strong>{total} ₺</strong>
+          <small>{cartItems.length} ürün</small>
         </div>
         <button onClick={() => setMobileCartOpen(true)}>Adisyonu Aç</button>
       </div>
