@@ -14,6 +14,12 @@ const normalizeTableName = value => value?.trim().toLowerCase();
 const formatPrice = value => `${Number(value || 0)} ₺`;
 
 function App() {
+  const panelPassword = import.meta.env.VITE_PANEL_PASSWORD || "1234";
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => sessionStorage.getItem("saray-panel-auth") === "true"
+  );
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [screen, setScreen] = useState("tables");
   const [selectedTable, setSelectedTable] = useState(null);
   const [products, setProducts] = useState([]);
@@ -29,6 +35,33 @@ function App() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
+
+  function handleLogin(event) {
+  event.preventDefault();
+
+  if (passwordInput === panelPassword) {
+    sessionStorage.setItem("saray-panel-auth", "true");
+    setIsAuthenticated(true);
+    setPasswordInput("");
+    setPasswordError("");
+    return;
+  }
+
+  setPasswordError("Şifre hatalı.");
+}
+
+  function logout() {
+  sessionStorage.removeItem("saray-panel-auth");
+  setIsAuthenticated(false);
+  setPasswordInput("");
+  setPasswordError("");
+  setScreen("tables");
+  setSelectedTable(null);
+  setCurrentOrderId(null);
+  setIsCurrentOrderPending(false);
+  setTransferMode(false);
+  setMobileCartOpen(false);
+}
 
   useEffect(() => {
   loadProducts();
@@ -546,6 +579,32 @@ async function clearOrder(orderId) {
   await loadOpenOrders();
 }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="app login-layout">
+        <form className="login-panel" onSubmit={handleLogin}>
+          <ClipboardList size={42} />
+          <div>
+            <h1>Saray Kafe Yönetim Paneli</h1>
+            <p>Devam etmek için panel şifresini girin.</p>
+          </div>
+
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={event => setPasswordInput(event.target.value)}
+            placeholder="Şifre"
+            autoFocus
+          />
+
+          {passwordError && <p className="status">{passwordError}</p>}
+
+          <button type="submit">Giriş Yap</button>
+        </form>
+      </div>
+    );
+  }
+
   if (screen === "tables") {
     return (
       <div className="app">
@@ -558,6 +617,7 @@ async function clearOrder(orderId) {
             <button className="report-button" onClick={loadEndOfDayReport} disabled={reportLoading}>
               <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu Raporu"}
             </button>
+            <button className="logout-button" onClick={logout}>Çıkış Yap</button>
             <ClipboardList size={34} />
           </div>
         </header>

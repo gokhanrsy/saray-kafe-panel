@@ -42,6 +42,60 @@ button{font-family:inherit; cursor:pointer}
   margin:auto;
 }
 
+.login-layout{
+  display:grid;
+  place-items:center;
+}
+
+.login-panel{
+  width:min(420px,100%);
+  background:rgba(23,29,34,.94);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:24px;
+  padding:26px;
+  box-shadow:0 18px 50px rgba(0,0,0,.32);
+}
+
+.login-panel svg{color:var(--gold)}
+
+.login-panel h1{
+  margin:16px 0 0;
+  font-size:28px;
+}
+
+.login-panel p{
+  margin:8px 0 18px;
+  color:var(--muted);
+}
+
+.login-panel input{
+  width:100%;
+  min-height:52px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  outline:0;
+  color:var(--text);
+  background:var(--panel2);
+  font-size:18px;
+  padding:0 14px;
+}
+
+.login-panel input:focus{
+  border-color:rgba(243,154,34,.75);
+  box-shadow:0 0 0 3px rgba(243,154,34,.12);
+}
+
+.login-panel button{
+  width:100%;
+  border:0;
+  border-radius:16px;
+  padding:16px;
+  color:#111;
+  background:var(--gold);
+  font-weight:900;
+  margin-top:14px;
+}
+
 .topbar{
   display:flex;
   align-items:center;
@@ -78,6 +132,15 @@ button{font-family:inherit; cursor:pointer}
 .report-button:disabled{
   cursor:wait;
   opacity:.72;
+}
+
+.logout-button{
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  padding:13px 16px;
+  color:var(--text);
+  background:var(--panel2);
+  font-weight:900;
 }
 
 .back{
