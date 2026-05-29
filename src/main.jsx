@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -24,6 +24,8 @@ function App() {
 
   const [openOrders, setOpenOrders] = useState([]);
   const [currentOrderId, setCurrentOrderId] = useState(null);
+  const [isCurrentOrderPending, setIsCurrentOrderPending] = useState(false);
+  const [transferMode, setTransferMode] = useState(false);
 
   useEffect(() => {
   loadProducts();
@@ -157,15 +159,24 @@ async function clearOrder(orderId) {
     }, {});
   }, [openOrders]);
 
+  const emptyTransferTargets = useMemo(() => {
+    return TABLES.filter(tableName =>
+      normalizeTableName(tableName) !== normalizeTableName(selectedTable) &&
+      !pendingOrdersByTable[normalizeTableName(tableName)]
+    );
+  }, [pendingOrdersByTable, selectedTable]);
+
   async function openOrder(tableName) {
   setSelectedTable(tableName);
   setStatus("");
   setSearchTerm("");
+  setTransferMode(false);
 
   const existingOrder = await findPendingOrderByTable(tableName);
 
   if (!existingOrder) {
     setCurrentOrderId(null);
+    setIsCurrentOrderPending(false);
     setCart({});
     setScreen("order");
     return;
@@ -196,6 +207,7 @@ async function clearOrder(orderId) {
   });
 
   setCurrentOrderId(existingOrder.id);
+  setIsCurrentOrderPending(existingOrder.status === "pending");
   setCart(restoredCart);
   setScreen("order");
 }
@@ -226,6 +238,55 @@ async function clearOrder(orderId) {
     });
   }
 
+  async function transferOrder(targetTable) {
+  if (!currentOrderId || !isCurrentOrderPending) {
+    setStatus("Sadece açık hesaplar transfer edilebilir.");
+    return;
+  }
+
+  if (normalizeTableName(targetTable) === normalizeTableName(selectedTable)) {
+    setStatus("Aynı masaya transfer yapılamaz.");
+    return;
+  }
+
+  setStatus("Masa transfer ediliyor...");
+
+  const targetOrder = await findPendingOrderByTable(targetTable);
+
+  if (targetOrder) {
+    setStatus("Hedef masada zaten açık hesap var.");
+    return;
+  }
+
+  const { data: transferredOrder, error } = await supabase
+    .from("orders")
+    .update({ table_name: targetTable })
+    .eq("id", currentOrderId)
+    .eq("status", "pending")
+    .select()
+    .single();
+
+  if (error) {
+    console.error(error);
+    setStatus(error.code === "PGRST116" ? "Bu hesap artık transfer edilemez." : "Masa transferi tamamlanamadı.");
+    return;
+  }
+
+  if (!transferredOrder) {
+    setStatus("Bu hesap artık transfer edilemez.");
+    return;
+  }
+
+  setCart({});
+  setCurrentOrderId(null);
+  setIsCurrentOrderPending(false);
+  setSelectedTable(null);
+  setTransferMode(false);
+  setStatus("");
+  await loadOpenOrders();
+  setScreen("tables");
+}
+
   async function saveOrder(markPaid = false) {
   if (!selectedTable) {
     setStatus("Önce masa ve ürün seç.");
@@ -254,7 +315,9 @@ async function clearOrder(orderId) {
 
     setCart({});
     setCurrentOrderId(null);
+    setIsCurrentOrderPending(false);
     setSelectedTable(null);
+    setTransferMode(false);
     setStatus("");
     await loadOpenOrders();
     setScreen("tables");
@@ -268,6 +331,7 @@ async function clearOrder(orderId) {
       orderId = existingOrder.id;
       orderWasPending = true;
       setCurrentOrderId(orderId);
+      setIsCurrentOrderPending(existingOrder.status === "pending");
     }
   }
 
@@ -291,6 +355,7 @@ async function clearOrder(orderId) {
 
     orderId = newOrder.id;
     setCurrentOrderId(orderId);
+    setIsCurrentOrderPending(newOrder.status === "pending");
   } else {
     const { error: updateError } = await supabase
       .from("orders")
@@ -354,6 +419,8 @@ async function clearOrder(orderId) {
 
     setCart({});
     setCurrentOrderId(null);
+    setIsCurrentOrderPending(false);
+    setTransferMode(false);
 
     await loadProducts();
   }
@@ -478,6 +545,30 @@ async function clearOrder(orderId) {
           </div>
 
           {status && <p className="status">{status}</p>}
+
+          {isCurrentOrderPending && currentOrderId && (
+            <div className="transfer-panel">
+              <button className="transfer" onClick={() => setTransferMode(prev => !prev)}>
+                <ArrowRightLeft size={18} /> Masa Transferi
+              </button>
+
+              {transferMode && (
+                <div className="transfer-targets">
+                  <span>Boş masa seç</span>
+
+                  {emptyTransferTargets.length === 0 && (
+                    <p className="empty">Transfer edilecek boş masa yok.</p>
+                  )}
+
+                  {emptyTransferTargets.map(tableName => (
+                    <button key={tableName} onClick={() => transferOrder(tableName)}>
+                      {tableName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <button className="save" onClick={() => saveOrder(false)}>
             <Save size={18} /> Siparişi Kaydet

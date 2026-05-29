@@ -284,7 +284,7 @@ button{font-family:inherit; cursor:pointer}
   border-radius:14px;
 }
 
-.save,.pay{
+.save,.pay,.transfer{
   width:100%;
   border:0;
   border-radius:16px;
@@ -300,6 +300,47 @@ button{font-family:inherit; cursor:pointer}
 
 .save{background:#33404b}
 .pay{background:var(--green)}
+.transfer{background:#2b5260}
+
+.transfer-panel{
+  margin-bottom:4px;
+}
+
+.transfer-targets{
+  margin-top:10px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+}
+
+.transfer-targets span{
+  grid-column:1/-1;
+  color:var(--muted);
+  font-size:14px;
+}
+
+.transfer-targets .empty{
+  grid-column:1/-1;
+  margin:0;
+}
+
+.transfer-targets button{
+  border:0;
+  border-radius:12px;
+  padding:12px;
+  color:var(--text);
+  background:var(--panel2);
+  font-weight:800;
+}
+
+.transfer-targets button:hover{
+  background:var(--gold);
+  color:#111;
+}
 
 @media(max-width:900px){
   .table-grid{grid-template-columns:repeat(2,1fr)}
