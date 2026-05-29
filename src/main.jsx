@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -19,6 +19,7 @@ function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
   const [status, setStatus] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState("Tümü");
 
   const [openOrders, setOpenOrders] = useState([]);
@@ -130,9 +131,18 @@ async function clearOrder(orderId) {
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    if (category === "Tümü") return products;
-    return products.filter(p => p.category === category);
-  }, [products, category]);
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const categoryProducts = category === "Tümü"
+      ? products
+      : products.filter(product => product.category === category);
+
+    if (!normalizedSearch) return categoryProducts;
+
+    return categoryProducts.filter(product =>
+      product.name?.toLowerCase().includes(normalizedSearch) ||
+      product.category?.toLowerCase().includes(normalizedSearch)
+    );
+  }, [products, category, searchTerm]);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
@@ -150,6 +160,7 @@ async function clearOrder(orderId) {
   async function openOrder(tableName) {
   setSelectedTable(tableName);
   setStatus("");
+  setSearchTerm("");
 
   const existingOrder = await findPendingOrderByTable(tableName);
 
@@ -361,10 +372,10 @@ async function clearOrder(orderId) {
       <div className="app">
         <header className="topbar">
           <div>
-            <h1>Saray Kafe Panel</h1>
-            <p>Tablet sipariş sistemi</p>
+            <h1>Saray Kafe Yönetim Paneli</h1>
+            <p>Masa, paket ve gel-al sipariş takibi</p>
           </div>
-          <Coffee size={34} />
+          <ClipboardList size={34} />
         </header>
 
         <section className="table-grid">
@@ -374,7 +385,7 @@ async function clearOrder(orderId) {
             const emptyClass = t.includes("Paket")
               ? "purple"
               : t.includes("Gel")
-                ? "green"
+                ? "teal"
                 : "empty";
 
             return (
@@ -403,9 +414,20 @@ async function clearOrder(orderId) {
         <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
         <div>
           <h1>{selectedTable}</h1>
-          <p>Sipariş oluştur</p>
+          <p>Adisyon yönetimi</p>
         </div>
       </header>
+
+      <div className="order-tools">
+        <label className="search-box">
+          <Search size={18} />
+          <input
+            value={searchTerm}
+            onChange={event => setSearchTerm(event.target.value)}
+            placeholder="Ürün ara"
+          />
+        </label>
+      </div>
 
       <div className="category-row">
         {categories.map(c => (
@@ -417,6 +439,8 @@ async function clearOrder(orderId) {
 
       <main className="order-main">
         <section className="products">
+          {filteredProducts.length === 0 && <p className="empty products-empty">Ürün bulunamadı.</p>}
+
           {filteredProducts.map(product => {
             const qty = cart[product.name]?.quantity || 0;
             return (

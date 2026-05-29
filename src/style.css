@@ -11,14 +11,27 @@
 
 *{box-sizing:border-box}
 
+html{
+  min-height:100%;
+  background:#0b0f13;
+  overscroll-behavior:none;
+}
+
 body{
   margin:0;
+  min-height:100vh;
+  background-color:#0b0f13;
   background:
     radial-gradient(circle at top left, rgba(243,154,34,.14), transparent 35%),
     linear-gradient(135deg,#0b0f13,#10171d);
+  background-attachment:fixed;
+  background-repeat:no-repeat;
+  background-color:#0b0f13;
   color:var(--text);
   font-family:Inter, system-ui, Arial, sans-serif;
 }
+
+#root{min-height:100vh}
 
 button{font-family:inherit; cursor:pointer}
 
@@ -80,11 +93,14 @@ button{font-family:inherit; cursor:pointer}
 .table-card span{color:var(--muted)}
 .table-card.purple{background:linear-gradient(145deg,#3b254d,#1b1722)}
 .table-card.green{background:linear-gradient(145deg,#174d2a,#111e18)}
+.table-card.teal{background:linear-gradient(145deg,#0f6670,#102227)}
 .table-card.empty{background:linear-gradient(145deg,#1f6b38,#111e18)}
 .table-card.open{background:linear-gradient(145deg,#8a4f10,#1f1710)}
 .table-card.empty svg{color:#8ee0a6}
+.table-card.teal svg{color:#7fe7dc}
 .table-card.open svg{color:var(--gold)}
 .table-card.empty span,
+.table-card.teal span,
 .table-card.open span{color:rgba(255,255,255,.78)}
 .table-total{
   font-size:24px;
@@ -109,6 +125,40 @@ button{font-family:inherit; cursor:pointer}
 .stats span{color:var(--muted)}
 
 .order-layout .topbar{justify-content:flex-start}
+
+.order-tools{
+  display:flex;
+  margin-bottom:12px;
+}
+
+.search-box{
+  width:min(420px,100%);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:rgba(23,29,34,.92);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  padding:0 14px;
+  color:var(--muted);
+}
+
+.search-box:focus-within{
+  border-color:rgba(243,154,34,.75);
+  box-shadow:0 0 0 3px rgba(243,154,34,.12);
+}
+
+.search-box input{
+  width:100%;
+  min-height:48px;
+  border:0;
+  outline:0;
+  color:var(--text);
+  background:transparent;
+  font-size:16px;
+}
+
+.search-box input::placeholder{color:var(--muted)}
 
 .category-row{
   display:flex;
@@ -142,6 +192,12 @@ button{font-family:inherit; cursor:pointer}
   display:grid;
   grid-template-columns:repeat(2,1fr);
   gap:14px;
+}
+
+.products-empty{
+  grid-column:1/-1;
+  margin:0;
+  padding:18px;
 }
 
 .product-card{
