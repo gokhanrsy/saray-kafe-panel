@@ -1437,6 +1437,8 @@ body{
 
 .quick-add-card{
   position:relative;
+  touch-action:manipulation;
+  user-select:none;
 }
 
 .quick-add-card::after{
@@ -1448,6 +1450,18 @@ body{
   font-size:11px;
   font-weight:900;
   letter-spacing:.04em;
+}
+
+.quick-add-card.is-favorite{
+  border-color:rgba(243,194,91,.34);
+  background:
+    linear-gradient(135deg,rgba(243,194,91,.12),rgba(255,255,255,.035)),
+    rgba(255,255,255,.035);
+}
+
+.quick-add-card.is-favorite::after{
+  content:"★ Favori";
+  color:#ffd977;
 }
 
 .product-qty{
@@ -1523,6 +1537,14 @@ body{
 .weighted-sheet p{
   color:var(--muted);
   margin:6px 0 14px;
+}
+
+.weighted-sheet label{
+  display:block;
+  margin-bottom:7px;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:900;
 }
 
 .weighted-sheet input{
@@ -2194,4 +2216,20 @@ button:disabled{
   .split-pay{
     padding:13px;
   }
+}
+
+.product-row-actions .favorite-toggle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  color:#ffe7a8;
+  border:1px solid rgba(243,194,91,.22);
+  background:rgba(243,194,91,.1);
+}
+
+.product-row-actions .favorite-toggle.active{
+  color:#17110a;
+  border-color:transparent;
+  background:var(--gold);
 }

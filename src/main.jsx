@@ -1,6 +1,6 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -45,8 +45,11 @@ function App() {
   const [splitPeople, setSplitPeople] = useState(2);
   const [splitSelections, setSplitSelections] = useState({});
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [autoSaveVersion, setAutoSaveVersion] = useState(0);
   const [weightedProduct, setWeightedProduct] = useState(null);
   const [weightedAmount, setWeightedAmount] = useState("");
+  const favoritePressTimer = useRef(null);
+  const longPressTriggered = useRef(false);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const emptyProductForm = {
@@ -238,6 +241,16 @@ async function clearOrder(orderId) {
       return sum + item.price * selectedQuantity;
     }, 0);
   }, [cartItems, splitSelections]);
+
+  useEffect(() => {
+    if (autoSaveVersion === 0 || screen !== "order" || !selectedTable) return;
+
+    const timer = setTimeout(() => {
+      saveOrder(false, { silent: true });
+    }, 650);
+
+    return () => clearTimeout(timer);
+  }, [autoSaveVersion, screen, selectedTable, cartItems.length, total, orderNote]);
 
   const pendingOrdersByTable = useMemo(() => {
     return openOrders.reduce((ordersByTable, order) => {
@@ -465,6 +478,36 @@ async function clearOrder(orderId) {
   setProductStatus(nextActive ? "Ürün aktif edildi." : "Ürün pasif edildi.");
 }
 
+  async function toggleProductFavorite(product, options = {}) {
+  if (!product?.name) return;
+  const nextFavorite = product.favorite !== true;
+  const source = options.source || "management";
+
+  if (source === "management") setProductStatus("Favori güncelleniyor...");
+  else setStatus(nextFavorite ? "Favorilere ekleniyor..." : "Favorilerden çıkarılıyor...");
+
+  const { error } = await supabase
+    .from("products")
+    .update({ favorite: nextFavorite })
+    .eq("name", product.name);
+
+  if (error) {
+    console.error(error);
+    const message = "Favori güncellenemedi. Supabase products tablosuna favorite kolonunu ekleyin.";
+    if (source === "management") setProductStatus(message);
+    else setStatus(message);
+    return;
+  }
+
+  await loadProducts();
+
+  if (source === "management") {
+    setProductStatus(nextFavorite ? "Ürün favorilere eklendi." : "Ürün favorilerden çıkarıldı.");
+  } else {
+    setStatus(nextFavorite ? "Favorilere eklendi." : "Favorilerden çıkarıldı.");
+  }
+}
+
   async function addStock(product) {
   const quantity = Number(stockEntryAmounts[product.name] || 0);
   const note = stockEntryNotes[product.name]?.trim() || "Stok girişi";
@@ -597,9 +640,15 @@ async function clearOrder(orderId) {
         }
       };
     });
+    setAutoSaveVersion(version => version + 1);
   }
 
   function handleProductPress(product) {
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      return;
+    }
+
     if (product.unit_type === "weighted") {
       setWeightedProduct(product);
       setWeightedAmount("");
@@ -607,6 +656,19 @@ async function clearOrder(orderId) {
     }
 
     addProduct(product);
+  }
+
+  function startFavoriteLongPress(product) {
+    longPressTriggered.current = false;
+    window.clearTimeout(favoritePressTimer.current);
+    favoritePressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true;
+      toggleProductFavorite(product, { source: "order" });
+    }, 650);
+  }
+
+  function cancelFavoriteLongPress() {
+    window.clearTimeout(favoritePressTimer.current);
   }
 
   function removeProduct(product) {
@@ -618,6 +680,7 @@ async function clearOrder(orderId) {
       else next[product.name] = { ...current, quantity: current.quantity - 1 };
       return next;
     });
+    setAutoSaveVersion(version => version + 1);
   }
 
   function deleteCartItem(itemName) {
@@ -626,6 +689,7 @@ async function clearOrder(orderId) {
       delete next[itemName];
       return next;
     });
+    setAutoSaveVersion(version => version + 1);
   }
 
   function confirmWeightedProduct() {
@@ -638,7 +702,8 @@ async function clearOrder(orderId) {
     }
 
     const grams = Math.round((amount / kgPrice) * 1000);
-    const cartName = `${weightedProduct.name} - ${amount} TL`;
+    const amountLabel = Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+    const cartName = `${weightedProduct.name} - ${amountLabel} TL`;
 
     setCart(prev => {
       const current = prev[cartName];
@@ -661,6 +726,7 @@ async function clearOrder(orderId) {
 
     setWeightedProduct(null);
     setWeightedAmount("");
+    setAutoSaveVersion(version => version + 1);
   }
 
   async function transferOrder(targetTable) {
@@ -1349,7 +1415,7 @@ async function clearOrder(orderId) {
 
             <div className="form-grid">
               <label>
-                Fiyat
+                {productForm.unit_type === "weighted" ? "Kg fiyatı" : "Fiyat"}
                 <input
                   type="number"
                   min="0"
@@ -1425,6 +1491,13 @@ async function clearOrder(orderId) {
                   {product.unit_type === "weighted" ? " · Tartılı" : ""}
                 </small>
                 <div className="product-row-actions">
+                  <button
+                    className={`favorite-toggle ${product.favorite === true ? "active" : ""}`}
+                    onClick={() => toggleProductFavorite(product)}
+                  >
+                    <Star size={16} fill={product.favorite === true ? "currentColor" : "none"} />
+                    {product.favorite === true ? "Favori" : "Favori Yap"}
+                  </button>
                   <button onClick={() => editProduct(product)}>Düzenle</button>
                   <button onClick={() => toggleProductActive(product)}>
                     {product.active === false ? "Aktif Yap" : "Pasif Yap"}
@@ -1558,9 +1631,21 @@ async function clearOrder(orderId) {
           </div>
           <div className="quick-grid">
             {favoriteProducts.map(product => (
-              <button key={product.name} onClick={() => handleProductPress(product)}>
+              <button
+                key={product.name}
+                onClick={() => handleProductPress(product)}
+                onPointerDown={() => startFavoriteLongPress(product)}
+                onPointerUp={cancelFavoriteLongPress}
+                onPointerLeave={cancelFavoriteLongPress}
+                onPointerCancel={cancelFavoriteLongPress}
+                onContextMenu={event => {
+                  event.preventDefault();
+                  if (longPressTriggered.current) return;
+                  toggleProductFavorite(product, { source: "order" });
+                }}
+              >
                 <span>{product.name}</span>
-                <b>{formatPrice(product.price)}</b>
+                <b>{formatPrice(product.price)}{product.unit_type === "weighted" ? " / kg" : ""}</b>
               </button>
             ))}
           </div>
@@ -1593,11 +1678,25 @@ async function clearOrder(orderId) {
           {filteredProducts.map(product => {
             const qty = cart[product.name]?.quantity || 0;
             return (
-              <button className="product-card quick-add-card" key={product.name} onClick={() => handleProductPress(product)}>
+              <button
+                className={`product-card quick-add-card ${product.favorite === true ? "is-favorite" : ""}`}
+                key={product.name}
+                onClick={() => handleProductPress(product)}
+                onPointerDown={() => startFavoriteLongPress(product)}
+                onPointerUp={cancelFavoriteLongPress}
+                onPointerLeave={cancelFavoriteLongPress}
+                onPointerCancel={cancelFavoriteLongPress}
+                onContextMenu={event => {
+                  event.preventDefault();
+                  if (longPressTriggered.current) return;
+                  toggleProductFavorite(product, { source: "order" });
+                }}
+              >
                 <div>
                   <strong>{product.name}</strong>
                   <span>
                     {product.category}
+                    {product.favorite === true ? " · Favori" : ""}
                     {product.unit_type === "weighted" ? " · Tartılı" : ""}
                   </span>
                   <b>{Number(product.price || 0)} ₺{product.unit_type === "weighted" ? " / kg" : ""}</b>
@@ -1620,7 +1719,10 @@ async function clearOrder(orderId) {
             Sipariş Notu
             <textarea
               value={orderNote}
-              onChange={event => setOrderNote(event.target.value)}
+              onChange={event => {
+                setOrderNote(event.target.value);
+                setAutoSaveVersion(version => version + 1);
+              }}
               placeholder="açık çay, şekersiz, ısıtılacak, paket olsun"
               rows={3}
             />
@@ -1631,10 +1733,11 @@ async function clearOrder(orderId) {
           {cartItems.map(item => (
             <div className="cart-line" key={item.name}>
               <span>
-                {item.name}
+                {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
                 <small>
-                  {item.quantity} x {item.price} ₺
-                  {isWeightedCartItem(item) && item.grams ? ` · Yaklaşık ${item.grams} g` : ""}
+                  {isWeightedCartItem(item)
+                    ? `${formatPrice(item.price)} · ≈${Number(item.grams || 0) * item.quantity} g`
+                    : `${item.quantity} x ${item.price} ₺`}
                 </small>
               </span>
               <b>{item.quantity * item.price} ₺</b>
@@ -1750,10 +1853,6 @@ async function clearOrder(orderId) {
             </div>
           )}
 
-          <button className="save" onClick={() => saveOrder(false)}>
-            <Save size={18} /> Siparişi Kaydet
-          </button>
-
           <button className="pay" onClick={() => saveOrder(true)}>
             <CreditCard size={18} /> Ödeme Al
           </button>
@@ -1774,8 +1873,12 @@ async function clearOrder(orderId) {
           <div className="weighted-sheet">
             <div>
               <h2>{weightedProduct.name}</h2>
-              <p>Kg fiyatı {formatPrice(weightedProduct.price)}. TL tutarı girin.</p>
+              <p>{formatPrice(weightedProduct.price)}/kg</p>
             </div>
+
+            <label>
+              Tutar
+            </label>
 
             <input
               type="number"
