@@ -11,11 +11,14 @@ const TABLES = [
   "Masa 13", "Paket", "Gel Al"
 ];
 
-const QUICK_PRODUCT_NAMES = ["Çay", "Su", "Latte", "Türk Kahvesi", "Kola", "Börek"];
-
 const normalizeTableName = value => value?.trim().toLowerCase();
 
 const formatPrice = value => `${Number(value || 0)} ₺`;
+
+const isWeightedCartItem = item =>
+  item.product?.unit_type === "weighted" || / - \d+([.,]\d+)? TL$/.test(item.name);
+
+const getWeightedBaseName = item => item.name.replace(/ - \d+([.,]\d+)? TL$/, "");
 
 function App() {
   const panelPassword = import.meta.env.VITE_PANEL_PASSWORD || "1234";
@@ -42,7 +45,8 @@ function App() {
   const [splitPeople, setSplitPeople] = useState(2);
   const [splitSelections, setSplitSelections] = useState({});
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [autoSaveVersion, setAutoSaveVersion] = useState(0);
+  const [weightedProduct, setWeightedProduct] = useState(null);
+  const [weightedAmount, setWeightedAmount] = useState("");
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const emptyProductForm = {
@@ -50,7 +54,9 @@ function App() {
     category: "",
     price: "",
     stock: "",
-    active: true
+    active: true,
+    favorite: false,
+    unit_type: "piece"
   };
   const [editingProductName, setEditingProductName] = useState(null);
   const [productForm, setProductForm] = useState(emptyProductForm);
@@ -196,15 +202,17 @@ async function clearOrder(orderId) {
         .map(product => product.category)
         .filter(Boolean)
     ));
-    return ["Tümü", ...list];
+    return ["Favoriler", "Tümü", ...list];
   }, [products]);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const activeProducts = products.filter(product => product.active !== false);
-    const categoryProducts = category === "Tümü"
-      ? activeProducts
-      : activeProducts.filter(product => product.category === category);
+    const categoryProducts = category === "Favoriler"
+      ? activeProducts.filter(product => product.favorite === true)
+      : category === "Tümü"
+        ? activeProducts
+        : activeProducts.filter(product => product.category === category);
 
     if (!normalizedSearch) return categoryProducts;
 
@@ -214,13 +222,8 @@ async function clearOrder(orderId) {
     );
   }, [products, category, searchTerm]);
 
-  const quickProducts = useMemo(() => {
-    return QUICK_PRODUCT_NAMES
-      .map(quickName => products.find(product =>
-        product.active !== false &&
-        product.name?.toLocaleLowerCase("tr-TR") === quickName.toLocaleLowerCase("tr-TR")
-      ))
-      .filter(Boolean);
+  const favoriteProducts = useMemo(() => {
+    return products.filter(product => product.active !== false && product.favorite === true);
   }, [products]);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
@@ -235,16 +238,6 @@ async function clearOrder(orderId) {
       return sum + item.price * selectedQuantity;
     }, 0);
   }, [cartItems, splitSelections]);
-
-  useEffect(() => {
-  if (autoSaveVersion === 0 || screen !== "order" || !selectedTable) return;
-
-  const timer = setTimeout(() => {
-    saveOrder(false, { silent: true });
-  }, 650);
-
-  return () => clearTimeout(timer);
-}, [autoSaveVersion, screen, selectedTable, cartItems.length, total]);
 
   const pendingOrdersByTable = useMemo(() => {
     return openOrders.reduce((ordersByTable, order) => {
@@ -396,7 +389,9 @@ async function clearOrder(orderId) {
     category: product.category || "",
     price: String(product.price ?? ""),
     stock: String(product.stock ?? ""),
-    active: product.active !== false
+    active: product.active !== false,
+    favorite: product.favorite === true,
+    unit_type: product.unit_type || "piece"
   });
   setProductStatus("");
 }
@@ -422,7 +417,9 @@ async function clearOrder(orderId) {
     category: categoryName,
     price,
     stock,
-    active: productForm.active
+    active: productForm.active,
+    favorite: productForm.favorite,
+    unit_type: productForm.unit_type || "piece"
   };
 
   const query = editingProductName
@@ -433,7 +430,11 @@ async function clearOrder(orderId) {
 
   if (error) {
     console.error(error);
-    setProductStatus("Ürün kaydedilemedi.");
+    setProductStatus(
+      String(error.message || "").includes("favorite") || String(error.message || "").includes("unit_type")
+        ? "Ürün kaydedilemedi. Supabase products tablosuna favorite ve unit_type kolonlarını ekleyin."
+        : "Ürün kaydedilemedi."
+    );
     setProductSaving(false);
     return;
   }
@@ -555,13 +556,23 @@ async function clearOrder(orderId) {
   const restoredCart = {};
 
   items.forEach(item => {
+    const baseName = getWeightedBaseName({ name: item.product_name });
+    const baseProduct = products.find(product => product.name === baseName);
+    const isWeighted = baseProduct?.unit_type === "weighted" || / - \d+([.,]\d+)? TL$/.test(item.product_name);
+    const grams = isWeighted && Number(baseProduct?.price || 0) > 0
+      ? Math.round((Number(item.unit_price || 0) / Number(baseProduct.price || 0)) * 1000)
+      : null;
+
     restoredCart[item.product_name] = {
       name: item.product_name,
       price: Number(item.unit_price),
       quantity: item.quantity,
+      grams,
       product: {
-        name: item.product_name,
-        price: item.unit_price
+        name: isWeighted ? baseName : item.product_name,
+        price: item.unit_price,
+        unit_type: isWeighted ? "weighted" : baseProduct?.unit_type || "piece",
+        grams
       }
     };
   });
@@ -586,7 +597,16 @@ async function clearOrder(orderId) {
         }
       };
     });
-    setAutoSaveVersion(version => version + 1);
+  }
+
+  function handleProductPress(product) {
+    if (product.unit_type === "weighted") {
+      setWeightedProduct(product);
+      setWeightedAmount("");
+      return;
+    }
+
+    addProduct(product);
   }
 
   function removeProduct(product) {
@@ -598,7 +618,49 @@ async function clearOrder(orderId) {
       else next[product.name] = { ...current, quantity: current.quantity - 1 };
       return next;
     });
-    setAutoSaveVersion(version => version + 1);
+  }
+
+  function deleteCartItem(itemName) {
+    setCart(prev => {
+      const next = { ...prev };
+      delete next[itemName];
+      return next;
+    });
+  }
+
+  function confirmWeightedProduct() {
+    const amount = Number(weightedAmount || 0);
+    const kgPrice = Number(weightedProduct?.price || 0);
+
+    if (!weightedProduct || amount <= 0 || kgPrice <= 0) {
+      setStatus("Geçerli bir tutar gir.");
+      return;
+    }
+
+    const grams = Math.round((amount / kgPrice) * 1000);
+    const cartName = `${weightedProduct.name} - ${amount} TL`;
+
+    setCart(prev => {
+      const current = prev[cartName];
+      return {
+        ...prev,
+        [cartName]: {
+          product: {
+            ...weightedProduct,
+            unit_type: "weighted",
+            base_name: weightedProduct.name,
+            grams
+          },
+          name: cartName,
+          price: amount,
+          quantity: current ? current.quantity + 1 : 1,
+          grams
+        }
+      };
+    });
+
+    setWeightedProduct(null);
+    setWeightedAmount("");
   }
 
   async function transferOrder(targetTable) {
@@ -717,6 +779,12 @@ async function clearOrder(orderId) {
 
     if (paidQuantity <= 0) continue;
 
+    if (isWeightedCartItem(item)) {
+      console.log("Skipping weighted split stock deduction", {
+        productName: item.name,
+        paidQuantity
+      });
+    } else {
     const { data: currentProduct, error: stockReadError } = await supabase
       .from("products")
       .select("name,stock")
@@ -772,6 +840,7 @@ async function clearOrder(orderId) {
         quantity: -paidQuantity,
         error: movementError
       });
+    }
     }
 
     if (remainingQuantity <= 0) {
@@ -996,6 +1065,14 @@ async function clearOrder(orderId) {
 
   if (markPaid) {
     for (const item of cartItems) {
+      if (isWeightedCartItem(item)) {
+        console.log("Skipping weighted stock deduction", {
+          productName: item.name,
+          quantity: item.quantity
+        });
+        continue;
+      }
+
       const { data: currentProduct, error: stockReadError } = await supabase
         .from("products")
         .select("name,stock")
@@ -1294,6 +1371,17 @@ async function clearOrder(orderId) {
               </label>
             </div>
 
+            <label>
+              Satış tipi
+              <select
+                value={productForm.unit_type}
+                onChange={event => setProductForm(prev => ({ ...prev, unit_type: event.target.value }))}
+              >
+                <option value="piece">Adetli ürün</option>
+                <option value="weighted">Tartılı / tutar bazlı</option>
+              </select>
+            </label>
+
             <label className="switch-row">
               <input
                 type="checkbox"
@@ -1301,6 +1389,15 @@ async function clearOrder(orderId) {
                 onChange={event => setProductForm(prev => ({ ...prev, active: event.target.checked }))}
               />
               Aktif ürün
+            </label>
+
+            <label className="switch-row">
+              <input
+                type="checkbox"
+                checked={productForm.favorite}
+                onChange={event => setProductForm(prev => ({ ...prev, favorite: event.target.checked }))}
+              />
+              Favori / hızlı ürün
             </label>
 
             {productStatus && <p className="status">{productStatus}</p>}
@@ -1322,7 +1419,11 @@ async function clearOrder(orderId) {
                 </div>
                 <b>{formatPrice(product.price)}</b>
                 <em>{Number(product.stock || 0)} stok</em>
-                <small>{product.active === false ? "Pasif" : "Aktif"}</small>
+                <small>
+                  {product.active === false ? "Pasif" : "Aktif"}
+                  {product.favorite === true ? " · Favori" : ""}
+                  {product.unit_type === "weighted" ? " · Tartılı" : ""}
+                </small>
                 <div className="product-row-actions">
                   <button onClick={() => editProduct(product)}>Düzenle</button>
                   <button onClick={() => toggleProductActive(product)}>
@@ -1449,15 +1550,15 @@ async function clearOrder(orderId) {
         </div>
       </header>
 
-      {quickProducts.length > 0 && (
+      {favoriteProducts.length > 0 && (
         <section className="quick-products">
           <div className="quick-head">
-            <strong>Favoriler / Hızlı Ürünler</strong>
+            <strong>Favoriler</strong>
             <span>Tek dokunuşla +1</span>
           </div>
           <div className="quick-grid">
-            {quickProducts.map(product => (
-              <button key={product.name} onClick={() => addProduct(product)}>
+            {favoriteProducts.map(product => (
+              <button key={product.name} onClick={() => handleProductPress(product)}>
                 <span>{product.name}</span>
                 <b>{formatPrice(product.price)}</b>
               </button>
@@ -1492,24 +1593,17 @@ async function clearOrder(orderId) {
           {filteredProducts.map(product => {
             const qty = cart[product.name]?.quantity || 0;
             return (
-              <div className="product-card quick-add-card" key={product.name} onClick={() => addProduct(product)}>
+              <button className="product-card quick-add-card" key={product.name} onClick={() => handleProductPress(product)}>
                 <div>
                   <strong>{product.name}</strong>
-                  <span>{product.category}</span>
-                  <b>{Number(product.price || 0)} ₺</b>
+                  <span>
+                    {product.category}
+                    {product.unit_type === "weighted" ? " · Tartılı" : ""}
+                  </span>
+                  <b>{Number(product.price || 0)} ₺{product.unit_type === "weighted" ? " / kg" : ""}</b>
                 </div>
-                <div className="counter">
-                  <button onClick={event => {
-                    event.stopPropagation();
-                    removeProduct(product);
-                  }}>-</button>
-                  <em>{qty}</em>
-                  <button onClick={event => {
-                    event.stopPropagation();
-                    addProduct(product);
-                  }}>+</button>
-                </div>
-              </div>
+                {qty > 0 && <em className="product-qty">{qty}</em>}
+              </button>
             );
           })}
         </section>
@@ -1536,8 +1630,24 @@ async function clearOrder(orderId) {
 
           {cartItems.map(item => (
             <div className="cart-line" key={item.name}>
-              <span>{item.name}<small>{item.quantity} x {item.price} ₺</small></span>
+              <span>
+                {item.name}
+                <small>
+                  {item.quantity} x {item.price} ₺
+                  {isWeightedCartItem(item) && item.grams ? ` · Yaklaşık ${item.grams} g` : ""}
+                </small>
+              </span>
               <b>{item.quantity * item.price} ₺</b>
+              <div className="cart-line-actions">
+                {!isWeightedCartItem(item) && (
+                  <button onClick={() => addProduct(item.product)}>+</button>
+                )}
+                <button onClick={() => {
+                  if (isWeightedCartItem(item)) deleteCartItem(item.name);
+                  else removeProduct(item.product);
+                }}>-</button>
+                <button className="danger" onClick={() => deleteCartItem(item.name)}>Sil</button>
+              </div>
             </div>
           ))}
 
@@ -1658,6 +1768,41 @@ async function clearOrder(orderId) {
         </div>
         <button onClick={() => setMobileCartOpen(true)}>Adisyonu Aç</button>
       </div>
+
+      {weightedProduct && (
+        <div className="weighted-overlay">
+          <div className="weighted-sheet">
+            <div>
+              <h2>{weightedProduct.name}</h2>
+              <p>Kg fiyatı {formatPrice(weightedProduct.price)}. TL tutarı girin.</p>
+            </div>
+
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={weightedAmount}
+              onChange={event => setWeightedAmount(event.target.value)}
+              placeholder="Örn. 200"
+              autoFocus
+            />
+
+            <strong>
+              Yaklaşık {Number(weightedProduct.price || 0) > 0 && Number(weightedAmount || 0) > 0
+                ? Math.round((Number(weightedAmount || 0) / Number(weightedProduct.price || 0)) * 1000)
+                : 0} g
+            </strong>
+
+            <div className="weighted-actions">
+              <button onClick={() => {
+                setWeightedProduct(null);
+                setWeightedAmount("");
+              }}>Vazgeç</button>
+              <button onClick={confirmWeightedProduct}>Adisyona Ekle</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

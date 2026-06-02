@@ -369,7 +369,8 @@ button{font-family:inherit; cursor:pointer}
   margin-top:12px;
 }
 
-.product-form input{
+.product-form input,
+.product-form select{
   width:100%;
   min-height:48px;
   border:1px solid rgba(255,255,255,.08);
@@ -382,7 +383,8 @@ button{font-family:inherit; cursor:pointer}
   margin-top:7px;
 }
 
-.product-form input:focus{
+.product-form input:focus,
+.product-form select:focus{
   border-color:rgba(243,154,34,.75);
   box-shadow:0 0 0 3px rgba(243,154,34,.12);
 }
@@ -1410,6 +1412,9 @@ body{
   padding:13px;
   border-radius:16px;
   cursor:pointer;
+  width:100%;
+  color:var(--text);
+  text-align:left;
 }
 
 .product-card > div:first-child{
@@ -1443,6 +1448,119 @@ body{
   font-size:11px;
   font-weight:900;
   letter-spacing:.04em;
+}
+
+.product-qty{
+  position:absolute;
+  right:12px;
+  bottom:12px;
+  min-width:30px;
+  height:30px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  color:var(--primary-ink);
+  background:var(--primary);
+  font-style:normal;
+  font-weight:900;
+}
+
+.quick-add-card .counter{
+  display:none;
+}
+
+.cart-line{
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+}
+
+.cart-line-actions{
+  grid-column:1/-1;
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+}
+
+.cart-line-actions button{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:8px 11px;
+  color:var(--text);
+  background:var(--panel2);
+  font-weight:900;
+}
+
+.cart-line-actions .danger{
+  color:#ffd0d0;
+  border-color:rgba(211,91,91,.25);
+  background:rgba(211,91,91,.12);
+}
+
+.weighted-overlay{
+  position:fixed;
+  inset:0;
+  z-index:80;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:rgba(0,0,0,.62);
+}
+
+.weighted-sheet{
+  width:min(420px,100%);
+  border:1px solid var(--line);
+  border-radius:24px;
+  padding:20px;
+  background:linear-gradient(180deg,rgba(18,26,34,.98),rgba(12,18,24,.98));
+  box-shadow:var(--shadow);
+}
+
+.weighted-sheet h2{
+  margin:0;
+}
+
+.weighted-sheet p{
+  color:var(--muted);
+  margin:6px 0 14px;
+}
+
+.weighted-sheet input{
+  width:100%;
+  min-height:54px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  color:var(--text);
+  background:#101820;
+  font-size:22px;
+  padding:0 14px;
+}
+
+.weighted-sheet > strong{
+  display:block;
+  color:var(--primary);
+  font-size:22px;
+  margin:14px 0;
+}
+
+.weighted-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.weighted-actions button{
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:14px;
+  color:var(--text);
+  background:var(--panel2);
+  font-weight:900;
+}
+
+.weighted-actions button:last-child{
+  color:var(--primary-ink);
+  background:var(--primary);
 }
 
 .counter{
