@@ -2058,15 +2058,34 @@ async function clearOrder(orderId) {
           <div className="mobile-cart-summary">
             {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
 
-            {cartItems.slice(0, 3).map(item => (
+            {cartItems.slice(0, 4).map(item => (
               <div className="mobile-cart-summary-line" key={`summary-${item.name}`}>
-                <span>{isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}</span>
+                <span>
+                  {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
+                  <small>
+                    {isWeightedCartItem(item)
+                      ? `${formatPrice(item.price)} · ≈${Number(item.grams || 0) * item.quantity} g`
+                      : `${item.quantity} x ${formatPrice(item.price)}`}
+                  </small>
+                </span>
                 <b>{formatPrice(item.price * item.quantity)}</b>
+                <div className="mobile-cart-row-actions">
+                  <button onClick={() => {
+                    if (isWeightedCartItem(item)) deleteCartItem(item.name);
+                    else removeProduct(item.product);
+                  }}>-</button>
+                  {!isWeightedCartItem(item) && (
+                    <button onClick={() => addProduct(item.product)}>+</button>
+                  )}
+                  <button className="danger" onClick={() => deleteCartItem(item.name)}>Sil</button>
+                </div>
               </div>
             ))}
 
-            {cartItems.length > 3 && (
-              <p className="mobile-cart-more">+{cartItems.length - 3} ürün daha</p>
+            {cartItems.length > 4 && (
+              <button className="mobile-cart-more" onClick={() => setMobileActionsOpen(true)}>
+                +{cartItems.length - 4} ürün daha
+              </button>
             )}
           </div>
 
