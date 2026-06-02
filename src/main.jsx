@@ -327,6 +327,10 @@ async function clearOrder(orderId) {
   }
 
   function getLocalDayRange(dateValue) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateValue || ""))) {
+      throw new Error(`Invalid report date: ${String(dateValue)}`);
+    }
+
     const [year, month, day] = dateValue.split("-").map(Number);
     const start = new Date(year, month - 1, day);
     const end = new Date(year, month - 1, day + 1);
@@ -343,91 +347,120 @@ async function clearOrder(orderId) {
   }
 
   async function loadEndOfDayReport(dateValue = reportDate) {
+  const requestedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(dateValue || ""))
+    ? dateValue
+    : reportDate;
+
   setReportLoading(true);
   setStatus("");
-  setReportDate(dateValue);
+  setReportDate(requestedDate);
 
-  const selectedDay = getLocalDayRange(dateValue);
-  const { data: orders, error: ordersError } = await supabase
-    .from("orders")
-    .select("id,total_price,created_at")
-    .eq("status", "completed")
-    .eq("paid", true)
-    .gte("created_at", selectedDay.start)
-    .lt("created_at", selectedDay.end);
+  try {
+    const selectedDay = getLocalDayRange(requestedDate);
+    console.log("Loading report", {
+      dateValue: requestedDate,
+      start: selectedDay.start,
+      end: selectedDay.end
+    });
 
-  if (ordersError) {
-    console.error(ordersError);
-    setStatus("Gün sonu raporu alınamadı.");
-    setReportLoading(false);
-    return;
-  }
+    const { data: orders, error: ordersError } = await supabase
+      .from("orders")
+      .select("id,total_price,created_at")
+      .eq("status", "completed")
+      .eq("paid", true)
+      .gte("created_at", selectedDay.start)
+      .lt("created_at", selectedDay.end);
 
-  const completedOrders = orders || [];
-  const orderIds = completedOrders.map(order => order.id);
-  let items = [];
-
-  if (orderIds.length > 0) {
-    const { data: orderItems, error: itemsError } = await supabase
-      .from("order_items")
-      .select("product_name,quantity,total_price,unit_price,order_id")
-      .in("order_id", orderIds);
-
-    if (itemsError) {
-      console.error(itemsError);
-      setStatus("Gün sonu ürünleri alınamadı.");
-      setReportLoading(false);
+    if (ordersError) {
+      console.error("Report orders query failed", {
+        dateValue: requestedDate,
+        range: selectedDay,
+        error: ordersError
+      });
+      setStatus("Rapor alınamadı. Sipariş kayıtları okunamadı.");
+      setReport(null);
       return;
     }
 
-    items = orderItems || [];
-  }
+    const completedOrders = orders || [];
+    const orderIds = completedOrders.map(order => order.id);
+    let items = [];
 
-  const productSales = {};
-  const categorySales = {};
-  const totalRevenue = completedOrders.reduce(
-    (sum, order) => sum + Number(order.total_price || 0),
-    0
-  );
-  const totalItems = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    if (orderIds.length > 0) {
+      const { data: orderItems, error: itemsError } = await supabase
+        .from("order_items")
+        .select("product_name,quantity,total_price,unit_price,order_id")
+        .in("order_id", orderIds);
 
-  items.forEach(item => {
-    const productName = item.product_name || "Bilinmeyen Ürün";
-    const quantity = Number(item.quantity || 0);
-    const itemTotal = Number(item.total_price || 0);
-    const category = productCategoriesByName[productName] || "Diğer";
+      if (itemsError) {
+        console.error("Report order_items query failed", {
+          dateValue: requestedDate,
+          orderIds,
+          error: itemsError
+        });
+        setStatus("Rapor ürünleri alınamadı. Lütfen tekrar deneyin.");
+        setReport(null);
+        return;
+      }
 
-    if (!productSales[productName]) {
-      productSales[productName] = {
-        name: productName,
-        quantity: 0,
-        total: 0
-      };
+      items = orderItems || [];
     }
 
-    productSales[productName].quantity += quantity;
-    productSales[productName].total += itemTotal;
-    categorySales[category] = (categorySales[category] || 0) + itemTotal;
-  });
+    const productSales = {};
+    const categorySales = {};
+    const totalRevenue = completedOrders.reduce(
+      (sum, order) => sum + Number(order.total_price || 0),
+      0
+    );
+    const totalItems = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
-  setReport({
-    dateValue,
-    dateLabel: selectedDay.label,
-    totalRevenue,
-    completedOrderCount: completedOrders.length,
-    totalItems,
-    topProducts: Object.values(productSales)
-      .sort((a, b) => b.quantity - a.quantity || b.total - a.total)
-      .slice(0, 5),
-    categoryTotals: Object.entries(categorySales)
-      .map(([name, total]) => ({ name, total }))
-      .sort((a, b) => b.total - a.total)
-  });
-  setReportLoading(false);
+    items.forEach(item => {
+      const productName = item.product_name || "Bilinmeyen Ürün";
+      const quantity = Number(item.quantity || 0);
+      const itemTotal = Number(item.total_price || 0);
+      const category = productCategoriesByName[productName] || "Diğer";
+
+      if (!productSales[productName]) {
+        productSales[productName] = {
+          name: productName,
+          quantity: 0,
+          total: 0
+        };
+      }
+
+      productSales[productName].quantity += quantity;
+      productSales[productName].total += itemTotal;
+      categorySales[category] = (categorySales[category] || 0) + itemTotal;
+    });
+
+    setReport({
+      dateValue: requestedDate,
+      dateLabel: selectedDay.label,
+      totalRevenue,
+      completedOrderCount: completedOrders.length,
+      totalItems,
+      topProducts: Object.values(productSales)
+        .sort((a, b) => b.quantity - a.quantity || b.total - a.total)
+        .slice(0, 5),
+      categoryTotals: Object.entries(categorySales)
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total)
+    });
+  } catch (error) {
+    console.error("Report loading failed", {
+      dateValue: requestedDate,
+      error
+    });
+    setStatus("Rapor hazırlanamadı. Tarih aralığı kontrol edilemedi.");
+    setReport(null);
+  } finally {
+    setReportLoading(false);
+  }
 }
 
   function changeReportDate(offsetDays) {
-  const [year, month, day] = reportDate.split("-").map(Number);
+  const activeDate = report?.dateValue || reportDate;
+  const [year, month, day] = activeDate.split("-").map(Number);
   const nextDate = new Date(year, month - 1, day + offsetDays);
   loadEndOfDayReport(getDateInputValue(nextDate));
 }
@@ -1301,7 +1334,7 @@ async function clearOrder(orderId) {
           <div className="topbar-actions grouped-actions">
             <div className="action-group">
               <span>Raporlar</span>
-              <button className="report-button" onClick={loadEndOfDayReport} disabled={reportLoading}>
+              <button className="report-button" onClick={() => loadEndOfDayReport()} disabled={reportLoading}>
                 <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu"}
               </button>
             </div>
