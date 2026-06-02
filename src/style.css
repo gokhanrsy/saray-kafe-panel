@@ -277,6 +277,25 @@ button{font-family:inherit; cursor:pointer}
   font-weight:800;
 }
 
+.report-controls{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.report-controls input{
+  min-height:40px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  padding:0 10px;
+  color:var(--text);
+  background:var(--panel2);
+  font-family:inherit;
+  font-weight:800;
+}
+
 .report-summary{
   display:grid;
   grid-template-columns:repeat(3,1fr);
@@ -958,6 +977,10 @@ button{font-family:inherit; cursor:pointer}
   .topbar-actions{align-items:flex-end;flex-direction:column}
   .report-summary{grid-template-columns:1fr}
   .report-lists{grid-template-columns:1fr}
+  .report-head{flex-direction:column}
+  .report-controls{width:100%;justify-content:stretch}
+  .report-controls button,
+  .report-controls input{flex:1 1 150px}
   .product-admin-layout{grid-template-columns:1fr}
   .product-form{position:static}
   .product-row{grid-template-columns:1fr}

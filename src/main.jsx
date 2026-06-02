@@ -50,6 +50,7 @@ function App() {
   const [weightedAmount, setWeightedAmount] = useState("");
   const favoritePressTimer = useRef(null);
   const longPressTriggered = useRef(false);
+  const [reportDate, setReportDate] = useState(() => getDateInputValue(new Date()));
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const emptyProductForm = {
@@ -318,10 +319,17 @@ async function clearOrder(orderId) {
       );
   }, [products, stockSearchTerm]);
 
-  function getTodayRange() {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  function getDateInputValue(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function getLocalDayRange(dateValue) {
+    const [year, month, day] = dateValue.split("-").map(Number);
+    const start = new Date(year, month - 1, day);
+    const end = new Date(year, month - 1, day + 1);
 
     return {
       start: start.toISOString(),
@@ -334,18 +342,19 @@ async function clearOrder(orderId) {
     };
   }
 
-  async function loadEndOfDayReport() {
+  async function loadEndOfDayReport(dateValue = reportDate) {
   setReportLoading(true);
   setStatus("");
+  setReportDate(dateValue);
 
-  const today = getTodayRange();
+  const selectedDay = getLocalDayRange(dateValue);
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
     .select("id,total_price,created_at")
     .eq("status", "completed")
     .eq("paid", true)
-    .gte("created_at", today.start)
-    .lt("created_at", today.end);
+    .gte("created_at", selectedDay.start)
+    .lt("created_at", selectedDay.end);
 
   if (ordersError) {
     console.error(ordersError);
@@ -402,7 +411,8 @@ async function clearOrder(orderId) {
   });
 
   setReport({
-    dateLabel: today.label,
+    dateValue,
+    dateLabel: selectedDay.label,
     totalRevenue,
     completedOrderCount: completedOrders.length,
     totalItems,
@@ -414,6 +424,12 @@ async function clearOrder(orderId) {
       .sort((a, b) => b.total - a.total)
   });
   setReportLoading(false);
+}
+
+  function changeReportDate(offsetDays) {
+  const [year, month, day] = reportDate.split("-").map(Number);
+  const nextDate = new Date(year, month - 1, day + offsetDays);
+  loadEndOfDayReport(getDateInputValue(nextDate));
 }
 
   function resetProductForm() {
@@ -1373,7 +1389,17 @@ async function clearOrder(orderId) {
                 <h2>Gün Sonu Raporu</h2>
                 <p>{report.dateLabel}</p>
               </div>
-              <button onClick={() => setReport(null)}>Kapat</button>
+              <div className="report-controls">
+                <button onClick={() => changeReportDate(-1)} disabled={reportLoading}>Önceki Gün</button>
+                <input
+                  type="date"
+                  value={report.dateValue || reportDate}
+                  onChange={event => loadEndOfDayReport(event.target.value)}
+                  disabled={reportLoading}
+                />
+                <button onClick={() => changeReportDate(1)} disabled={reportLoading}>Sonraki Gün</button>
+                <button onClick={() => setReport(null)}>Kapat</button>
+              </div>
             </div>
 
             <div className="report-summary">
@@ -1394,7 +1420,7 @@ async function clearOrder(orderId) {
             <div className="report-lists">
               <div>
                 <h3>En Çok Satan Ürünler</h3>
-                {report.topProducts.length === 0 && <p className="empty">Bugün tamamlanan satış yok.</p>}
+                {report.topProducts.length === 0 && <p className="empty">Seçilen gün tamamlanan satış yok.</p>}
                 {report.topProducts.map(product => (
                   <div className="report-line" key={product.name}>
                     <span>{product.name}<small>{product.quantity} adet</small></span>
