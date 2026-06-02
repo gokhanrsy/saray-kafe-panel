@@ -70,6 +70,12 @@ function App() {
   const [stockEntryAmounts, setStockEntryAmounts] = useState({});
   const [stockEntryNotes, setStockEntryNotes] = useState({});
   const [stockEntryStatus, setStockEntryStatus] = useState("");
+  const [historyOrders, setHistoryOrders] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("today");
+  const [historyDate, setHistoryDate] = useState(() => getDateInputValue(new Date()));
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const [historyStatus, setHistoryStatus] = useState("");
 
   function handleLogin(event) {
   event.preventDefault();
@@ -319,6 +325,21 @@ async function clearOrder(orderId) {
       );
   }, [products, stockSearchTerm]);
 
+  const filteredHistoryOrders = useMemo(() => {
+    const normalizedSearch = historySearchTerm.trim().toLocaleLowerCase("tr-TR");
+    if (!normalizedSearch) return historyOrders;
+
+    return historyOrders.filter(order => {
+      const tableName = order.table_name?.toLocaleLowerCase("tr-TR") || "";
+      const note = order.note?.toLocaleLowerCase("tr-TR") || "";
+      const itemMatch = (order.items || []).some(item =>
+        item.product_name?.toLocaleLowerCase("tr-TR").includes(normalizedSearch)
+      );
+
+      return tableName.includes(normalizedSearch) || note.includes(normalizedSearch) || itemMatch;
+    });
+  }, [historyOrders, historySearchTerm]);
+
   function getDateInputValue(date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -344,6 +365,32 @@ async function clearOrder(orderId) {
         year: "numeric"
       })
     };
+  }
+
+  function getHistoryDateRange(filter = historyFilter, dateValue = historyDate) {
+    const todayValue = getDateInputValue(new Date());
+
+    if (filter === "today") return getLocalDayRange(todayValue);
+
+    if (filter === "yesterday") {
+      const today = new Date();
+      const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+      return getLocalDayRange(getDateInputValue(yesterday));
+    }
+
+    if (filter === "last7") {
+      const today = new Date();
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+      const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+      return {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        label: "Son 7 gün"
+      };
+    }
+
+    return getLocalDayRange(dateValue);
   }
 
   async function loadEndOfDayReport(dateValue = reportDate) {
@@ -463,6 +510,94 @@ async function clearOrder(orderId) {
   const [year, month, day] = activeDate.split("-").map(Number);
   const nextDate = new Date(year, month - 1, day + offsetDays);
   loadEndOfDayReport(getDateInputValue(nextDate));
+}
+
+  async function loadOrderHistory(filter = historyFilter, dateValue = historyDate) {
+  setHistoryLoading(true);
+  setHistoryStatus("");
+  setHistoryFilter(filter);
+  setHistoryDate(dateValue);
+
+  try {
+    const selectedRange = getHistoryDateRange(filter, dateValue);
+    console.log("Loading order history", {
+      filter,
+      dateValue,
+      start: selectedRange.start,
+      end: selectedRange.end
+    });
+
+    const { data: orders, error: ordersError } = await supabase
+      .from("orders")
+      .select("id,table_name,status,total_price,note,created_at,paid")
+      .in("status", ["completed", "cancelled"])
+      .gte("created_at", selectedRange.start)
+      .lt("created_at", selectedRange.end)
+      .order("created_at", { ascending: false });
+
+    if (ordersError) {
+      console.error("Order history query failed", {
+        filter,
+        dateValue,
+        range: selectedRange,
+        error: ordersError
+      });
+      setHistoryStatus("Sipariş geçmişi alınamadı.");
+      setHistoryOrders([]);
+      return;
+    }
+
+    const historicalOrders = orders || [];
+    const orderIds = historicalOrders.map(order => order.id).filter(Boolean);
+    let items = [];
+
+    if (orderIds.length > 0) {
+      const { data: orderItems, error: itemsError } = await supabase
+        .from("order_items")
+        .select("order_id,product_name,quantity,unit_price,total_price")
+        .in("order_id", orderIds);
+
+      if (itemsError) {
+        console.error("Order history items query failed", {
+          filter,
+          dateValue,
+          orderIds,
+          error: itemsError
+        });
+        setHistoryStatus("Sipariş ürünleri alınamadı.");
+        setHistoryOrders([]);
+        return;
+      }
+
+      items = orderItems || [];
+    }
+
+    const itemsByOrderId = items.reduce((groupedItems, item) => {
+      groupedItems[item.order_id] = groupedItems[item.order_id] || [];
+      groupedItems[item.order_id].push(item);
+      return groupedItems;
+    }, {});
+
+    setHistoryOrders(historicalOrders.map(order => ({
+      ...order,
+      items: itemsByOrderId[order.id] || []
+    })));
+  } catch (error) {
+    console.error("Order history loading failed", {
+      filter,
+      dateValue,
+      error
+    });
+    setHistoryStatus("Sipariş geçmişi hazırlanamadı.");
+    setHistoryOrders([]);
+  } finally {
+    setHistoryLoading(false);
+  }
+}
+
+  function openOrderHistory() {
+  setScreen("order-history");
+  loadOrderHistory(historyFilter, historyDate);
 }
 
   function resetProductForm() {
@@ -1337,6 +1472,9 @@ async function clearOrder(orderId) {
               <button className="report-button" onClick={() => loadEndOfDayReport()} disabled={reportLoading}>
                 <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu"}
               </button>
+              <button className="report-button" onClick={openOrderHistory}>
+                <ClipboardList size={18} /> Sipariş Geçmişi
+              </button>
             </div>
             <div className="action-group">
               <span>Yönetim</span>
@@ -1706,6 +1844,108 @@ async function clearOrder(orderId) {
               />
               <button onClick={() => addStock(product)}>Stok Ekle</button>
             </div>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
+  if (screen === "order-history") {
+    return (
+      <div className="app order-history-page">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>Sipariş Geçmişi</h1>
+            <p>Tamamlanan ve iptal edilen siparişler</p>
+          </div>
+        </header>
+
+        <section className="history-toolbar">
+          <div className="history-filter-group">
+            {[
+              { value: "today", label: "Bugün" },
+              { value: "yesterday", label: "Dün" },
+              { value: "last7", label: "Son 7 gün" },
+              { value: "custom", label: "Özel tarih" }
+            ].map(option => (
+              <button
+                key={option.value}
+                className={historyFilter === option.value ? "active" : ""}
+                onClick={() => loadOrderHistory(option.value, historyDate)}
+                disabled={historyLoading}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {historyFilter === "custom" && (
+            <input
+              type="date"
+              value={historyDate}
+              onChange={event => loadOrderHistory("custom", event.target.value)}
+              disabled={historyLoading}
+            />
+          )}
+
+          <label className="search-box history-search">
+            <Search size={18} />
+            <input
+              value={historySearchTerm}
+              onChange={event => setHistorySearchTerm(event.target.value)}
+              placeholder="Masa, ürün veya not ara"
+            />
+          </label>
+        </section>
+
+        {historyStatus && <p className="status">{historyStatus}</p>}
+
+        <section className="history-list">
+          {historyLoading && <p className="empty history-empty">Sipariş geçmişi yükleniyor...</p>}
+
+          {!historyLoading && filteredHistoryOrders.length === 0 && (
+            <p className="empty history-empty">Seçilen filtrede sipariş geçmişi yok.</p>
+          )}
+
+          {!historyLoading && filteredHistoryOrders.map(order => (
+            <article className={`history-card ${order.status === "cancelled" ? "cancelled" : "completed"}`} key={order.id}>
+              <div className="history-card-head">
+                <div>
+                  <strong>{order.table_name || "Masa yok"}</strong>
+                  <span>
+                    {new Date(order.created_at).toLocaleString("tr-TR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })}
+                  </span>
+                </div>
+                <div>
+                  <em>{order.status}</em>
+                  <b>{formatPrice(order.total_price)}</b>
+                </div>
+              </div>
+
+              {order.note && (
+                <p className="history-note">{order.note}</p>
+              )}
+
+              <div className="history-items">
+                {(order.items || []).length === 0 && <p className="empty">Ürün kaydı yok.</p>}
+                {(order.items || []).map(item => (
+                  <div className="history-item" key={`${order.id}-${item.product_name}`}>
+                    <span>
+                      {getWeightedBaseName({ name: item.product_name })}
+                      <small>{Number(item.quantity || 0)} x {formatPrice(item.unit_price)}</small>
+                    </span>
+                    <b>{formatPrice(item.total_price)}</b>
+                  </div>
+                ))}
+              </div>
+            </article>
           ))}
         </section>
       </div>
