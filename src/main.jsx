@@ -6,8 +6,12 @@ import "./style.css";
 
 const TABLES = [
   "Masa 1", "Masa 2", "Masa 3", "Masa 4",
-  "Masa 5", "Masa 6", "Paket", "Gel Al"
+  "Masa 5", "Masa 6", "Masa 7", "Masa 8",
+  "Masa 9", "Masa 10", "Masa 11", "Masa 12",
+  "Masa 13", "Paket", "Gel Al"
 ];
+
+const QUICK_PRODUCT_NAMES = ["Çay", "Su", "Latte", "Türk Kahvesi", "Kola", "Börek"];
 
 const normalizeTableName = value => value?.trim().toLowerCase();
 
@@ -38,6 +42,7 @@ function App() {
   const [splitPeople, setSplitPeople] = useState(2);
   const [splitSelections, setSplitSelections] = useState({});
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [autoSaveVersion, setAutoSaveVersion] = useState(0);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const emptyProductForm = {
@@ -209,6 +214,15 @@ async function clearOrder(orderId) {
     );
   }, [products, category, searchTerm]);
 
+  const quickProducts = useMemo(() => {
+    return QUICK_PRODUCT_NAMES
+      .map(quickName => products.find(product =>
+        product.active !== false &&
+        product.name?.toLocaleLowerCase("tr-TR") === quickName.toLocaleLowerCase("tr-TR")
+      ))
+      .filter(Boolean);
+  }, [products]);
+
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
   const total = useMemo(() => {
@@ -221,6 +235,16 @@ async function clearOrder(orderId) {
       return sum + item.price * selectedQuantity;
     }, 0);
   }, [cartItems, splitSelections]);
+
+  useEffect(() => {
+  if (autoSaveVersion === 0 || screen !== "order" || !selectedTable) return;
+
+  const timer = setTimeout(() => {
+    saveOrder(false, { silent: true });
+  }, 650);
+
+  return () => clearTimeout(timer);
+}, [autoSaveVersion, screen, selectedTable, cartItems.length, total]);
 
   const pendingOrdersByTable = useMemo(() => {
     return openOrders.reduce((ordersByTable, order) => {
@@ -562,6 +586,7 @@ async function clearOrder(orderId) {
         }
       };
     });
+    setAutoSaveVersion(version => version + 1);
   }
 
   function removeProduct(product) {
@@ -573,6 +598,7 @@ async function clearOrder(orderId) {
       else next[product.name] = { ...current, quantity: current.quantity - 1 };
       return next;
     });
+    setAutoSaveVersion(version => version + 1);
   }
 
   async function transferOrder(targetTable) {
@@ -849,13 +875,15 @@ async function clearOrder(orderId) {
   await loadOpenOrders();
 }
 
-  async function saveOrder(markPaid = false) {
+  async function saveOrder(markPaid = false, options = {}) {
+  const silent = options.silent === true;
+
   if (!selectedTable) {
-    setStatus("Önce masa ve ürün seç.");
+    if (!silent) setStatus("Önce masa ve ürün seç.");
     return;
   }
 
-  setStatus("Kaydediliyor...");
+  if (!silent) setStatus("Kaydediliyor...");
 
   let orderId = currentOrderId;
   let orderWasPending = Boolean(orderId);
@@ -867,7 +895,7 @@ async function clearOrder(orderId) {
     }
 
     if (!orderId) {
-      setStatus("Once masa ve urun sec.");
+      if (!silent) setStatus("Once masa ve urun sec.");
       return;
     }
 
@@ -1039,11 +1067,13 @@ async function clearOrder(orderId) {
     await loadProducts();
   }
 
-  setStatus(
-    markPaid
-      ? "Ödeme alındı. Sipariş tamamlandı."
-      : "Sipariş kaydedildi."
-  );
+  if (!silent) {
+    setStatus(
+      markPaid
+        ? "Ödeme alındı. Sipariş tamamlandı."
+        : "Sipariş kaydedildi."
+    );
+  }
 
   await loadOpenOrders();
 }
@@ -1419,6 +1449,23 @@ async function clearOrder(orderId) {
         </div>
       </header>
 
+      {quickProducts.length > 0 && (
+        <section className="quick-products">
+          <div className="quick-head">
+            <strong>Favoriler / Hızlı Ürünler</strong>
+            <span>Tek dokunuşla +1</span>
+          </div>
+          <div className="quick-grid">
+            {quickProducts.map(product => (
+              <button key={product.name} onClick={() => addProduct(product)}>
+                <span>{product.name}</span>
+                <b>{formatPrice(product.price)}</b>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="order-tools">
         <label className="search-box">
           <Search size={18} />
@@ -1445,16 +1492,22 @@ async function clearOrder(orderId) {
           {filteredProducts.map(product => {
             const qty = cart[product.name]?.quantity || 0;
             return (
-              <div className="product-card" key={product.name}>
+              <div className="product-card quick-add-card" key={product.name} onClick={() => addProduct(product)}>
                 <div>
                   <strong>{product.name}</strong>
                   <span>{product.category}</span>
                   <b>{Number(product.price || 0)} ₺</b>
                 </div>
                 <div className="counter">
-                  <button onClick={() => removeProduct(product)}>-</button>
+                  <button onClick={event => {
+                    event.stopPropagation();
+                    removeProduct(product);
+                  }}>-</button>
                   <em>{qty}</em>
-                  <button onClick={() => addProduct(product)}>+</button>
+                  <button onClick={event => {
+                    event.stopPropagation();
+                    addProduct(product);
+                  }}>+</button>
                 </div>
               </div>
             );

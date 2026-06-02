@@ -1322,6 +1322,65 @@ body{
   min-height:74px;
 }
 
+.quick-products{
+  margin-bottom:12px;
+  padding:14px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:22px;
+  background:
+    linear-gradient(135deg,rgba(220,162,74,.08),rgba(95,182,168,.045)),
+    rgba(12,18,24,.72);
+  box-shadow:var(--shadow-soft);
+}
+
+.quick-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.quick-head strong{
+  font-size:16px;
+}
+
+.quick-head span{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+}
+
+.quick-grid{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:8px;
+}
+
+.quick-grid button{
+  min-height:66px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:16px;
+  padding:10px;
+  color:var(--text);
+  background:rgba(255,255,255,.055);
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:space-between;
+  font-weight:900;
+}
+
+.quick-grid button:hover{
+  border-color:rgba(220,162,74,.75);
+  background:rgba(220,162,74,.14);
+}
+
+.quick-grid b{
+  color:var(--primary);
+  font-size:13px;
+}
+
 .order-tools{
   display:grid;
   grid-template-columns:minmax(260px,420px) 1fr;
@@ -1350,6 +1409,7 @@ body{
   align-items:stretch;
   padding:13px;
   border-radius:16px;
+  cursor:pointer;
 }
 
 .product-card > div:first-child{
@@ -1368,6 +1428,21 @@ body{
 
 .product-card b{
   font-size:16px;
+}
+
+.quick-add-card{
+  position:relative;
+}
+
+.quick-add-card::after{
+  content:"Dokun +1";
+  position:absolute;
+  right:12px;
+  top:10px;
+  color:rgba(255,255,255,.46);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.04em;
 }
 
 .counter{
@@ -1433,6 +1508,10 @@ body{
   .dashboard-side .stats{
     grid-template-columns:repeat(3,1fr);
   }
+
+  .quick-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
 }
 
 @media(max-width:820px){
@@ -1461,6 +1540,10 @@ body{
 
   .products{
     grid-template-columns:1fr;
+  }
+
+  .quick-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
   }
 
   .order-tools{
@@ -1509,6 +1592,15 @@ body{
 
   .product-card{
     min-height:94px;
+  }
+
+  .quick-products{
+    padding:12px;
+    border-radius:18px;
+  }
+
+  .quick-grid button{
+    min-height:58px;
   }
 }
 
