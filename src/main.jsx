@@ -145,7 +145,35 @@ async function loadOpenOrders() {
     return;
   }
 
-  setOpenOrders(data || []);
+  const orders = data || [];
+  const orderIds = orders.map(order => order.id).filter(Boolean);
+
+  if (orderIds.length === 0) {
+    setOpenOrders([]);
+    return;
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from("order_items")
+    .select("order_id,product_name,quantity,unit_price,total_price")
+    .in("order_id", orderIds);
+
+  if (itemsError) {
+    console.error(itemsError);
+    setOpenOrders(orders);
+    return;
+  }
+
+  const itemsByOrderId = (items || []).reduce((groupedItems, item) => {
+    groupedItems[item.order_id] = groupedItems[item.order_id] || [];
+    groupedItems[item.order_id].push(item);
+    return groupedItems;
+  }, {});
+
+  setOpenOrders(orders.map(order => ({
+    ...order,
+    items: itemsByOrderId[order.id] || []
+  })));
 }
 
 async function findPendingOrderByTable(tableName) {
@@ -160,7 +188,6 @@ async function findPendingOrderByTable(tableName) {
   }
 
   const orders = data || [];
-  setOpenOrders(orders);
 
   return orders.find(
     order => normalizeTableName(order.table_name) === normalizeTableName(tableName)
@@ -1297,6 +1324,7 @@ async function clearOrder(orderId) {
                   : t.includes("Gel")
                     ? "teal"
                     : "empty";
+                const previewItems = pendingOrder?.items || [];
 
                 return (
                   <button key={t} className={`table-card ${isOpen ? "open" : emptyClass}`} onClick={() => openOrder(t)}>
@@ -1308,6 +1336,18 @@ async function clearOrder(orderId) {
                       <strong>{t}</strong>
                       <span>{isOpen ? "Açık Hesap" : "Boş Masa"}</span>
                     </div>
+                    {isOpen && previewItems.length > 0 && (
+                      <div className="table-order-preview">
+                        {previewItems.slice(0, 3).map(item => (
+                          <span key={`${pendingOrder.id}-${item.product_name}`}>
+                            {item.quantity}x {getWeightedBaseName({ name: item.product_name })}
+                          </span>
+                        ))}
+                        {previewItems.length > 3 && (
+                          <em>+{previewItems.length - 3} ürün</em>
+                        )}
+                      </div>
+                    )}
                     {isOpen && <b className="table-total">{formatPrice(pendingOrder.total_price)}</b>}
                   </button>
                 );
