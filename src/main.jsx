@@ -45,6 +45,7 @@ function App() {
   const [splitPeople, setSplitPeople] = useState(2);
   const [splitSelections, setSplitSelections] = useState({});
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [autoSaveVersion, setAutoSaveVersion] = useState(0);
   const [weightedProduct, setWeightedProduct] = useState(null);
   const [weightedAmount, setWeightedAmount] = useState("");
@@ -2054,7 +2055,22 @@ async function clearOrder(orderId) {
             <button className="cart-close" onClick={() => setMobileCartOpen(false)}>Kapat</button>
           </div>
 
-          <label className="order-note">
+          <div className="mobile-cart-summary">
+            {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
+
+            {cartItems.slice(0, 3).map(item => (
+              <div className="mobile-cart-summary-line" key={`summary-${item.name}`}>
+                <span>{isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}</span>
+                <b>{formatPrice(item.price * item.quantity)}</b>
+              </div>
+            ))}
+
+            {cartItems.length > 3 && (
+              <p className="mobile-cart-more">+{cartItems.length - 3} ürün daha</p>
+            )}
+          </div>
+
+          <label className="order-note desktop-cart-detail">
             Sipariş Notu
             <textarea
               value={orderNote}
@@ -2067,10 +2083,10 @@ async function clearOrder(orderId) {
             />
           </label>
 
-          {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
+          {cartItems.length === 0 && <p className="empty desktop-cart-detail">Henüz ürün yok.</p>}
 
           {cartItems.map(item => (
-            <div className="cart-line" key={item.name}>
+            <div className="cart-line desktop-cart-detail" key={item.name}>
               <span>
                 {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
                 <small>
@@ -2101,7 +2117,7 @@ async function clearOrder(orderId) {
           {status && <p className="status">{status}</p>}
 
           {isCurrentOrderPending && currentOrderId && (
-            <div className="transfer-panel">
+            <div className="transfer-panel desktop-cart-detail">
               <button className="transfer" onClick={() => setTransferMode(prev => !prev)}>
                 <ArrowRightLeft size={18} /> Masa Transferi
               </button>
@@ -2125,7 +2141,7 @@ async function clearOrder(orderId) {
           )}
 
           {isCurrentOrderPending && currentOrderId && (
-            <div className="split-panel">
+            <div className="split-panel desktop-cart-detail">
               <button className="split-toggle" onClick={() => setSplitMode(prev => !prev)}>
                 Adisyon Böl
               </button>
@@ -2195,6 +2211,10 @@ async function clearOrder(orderId) {
           <button className="pay" onClick={() => saveOrder(true)}>
             <CreditCard size={18} /> Ödeme Al
           </button>
+
+          <button className="mobile-extra-button" onClick={() => setMobileActionsOpen(true)}>
+            Ek İşlemler
+          </button>
         </aside>
       </main>
 
@@ -2206,6 +2226,155 @@ async function clearOrder(orderId) {
         </div>
         <button onClick={() => setMobileCartOpen(true)}>Adisyonu Aç</button>
       </div>
+
+      {mobileActionsOpen && (
+        <div className="mobile-actions-overlay">
+          <section className="mobile-actions-sheet">
+            <div className="mobile-actions-head">
+              <div>
+                <h2>Ek İşlemler</h2>
+                <p>Adisyon detayları ve masa işlemleri</p>
+              </div>
+              <button onClick={() => setMobileActionsOpen(false)}>Kapat</button>
+            </div>
+
+            <label className="order-note">
+              Sipariş Notu
+              <textarea
+                value={orderNote}
+                onChange={event => {
+                  setOrderNote(event.target.value);
+                  setAutoSaveVersion(version => version + 1);
+                }}
+                placeholder="açık çay, şekersiz, ısıtılacak, paket olsun"
+                rows={3}
+              />
+            </label>
+
+            <div className="mobile-detail-section">
+              <h3>Ürünleri Düzenle</h3>
+
+              {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
+
+              {cartItems.map(item => (
+                <div className="cart-line" key={`mobile-detail-${item.name}`}>
+                  <span>
+                    {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
+                    <small>
+                      {isWeightedCartItem(item)
+                        ? `${formatPrice(item.price)} · ≈${Number(item.grams || 0) * item.quantity} g`
+                        : `${item.quantity} x ${item.price} ₺`}
+                    </small>
+                  </span>
+                  <b>{item.quantity * item.price} ₺</b>
+                  <div className="cart-line-actions">
+                    {!isWeightedCartItem(item) && (
+                      <button onClick={() => addProduct(item.product)}>+</button>
+                    )}
+                    <button onClick={() => {
+                      if (isWeightedCartItem(item)) deleteCartItem(item.name);
+                      else removeProduct(item.product);
+                    }}>-</button>
+                    <button className="danger" onClick={() => deleteCartItem(item.name)}>Sil</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {isCurrentOrderPending && currentOrderId && (
+              <div className="transfer-panel">
+                <button className="transfer" onClick={() => setTransferMode(prev => !prev)}>
+                  <ArrowRightLeft size={18} /> Masa Transferi
+                </button>
+
+                {transferMode && (
+                  <div className="transfer-targets">
+                    <span>Boş masa seç</span>
+
+                    {emptyTransferTargets.length === 0 && (
+                      <p className="empty">Transfer edilecek boş masa yok.</p>
+                    )}
+
+                    {emptyTransferTargets.map(tableName => (
+                      <button key={tableName} onClick={() => transferOrder(tableName)}>
+                        {tableName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isCurrentOrderPending && currentOrderId && (
+              <div className="split-panel">
+                <button className="split-toggle" onClick={() => setSplitMode(prev => !prev)}>
+                  Adisyon Böl
+                </button>
+
+                {splitMode && (
+                  <div className="split-content">
+                    <div className="split-tabs">
+                      <button className={splitType === "equal" ? "active" : ""} onClick={() => setSplitType("equal")}>
+                        Eşit Böl
+                      </button>
+                      <button className={splitType === "items" ? "active" : ""} onClick={() => setSplitType("items")}>
+                        Ürün Seçerek Öde
+                      </button>
+                    </div>
+
+                    {splitType === "equal" && (
+                      <div className="equal-split">
+                        <label>
+                          Kişi sayısı
+                          <input
+                            type="number"
+                            min="1"
+                            value={splitPeople}
+                            onChange={event => setSplitPeople(Math.max(1, Number(event.target.value || 1)))}
+                          />
+                        </label>
+                        <div>
+                          <span>Kişi başı</span>
+                          <strong>{formatPrice(total / Math.max(1, splitPeople))}</strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {splitType === "items" && (
+                      <div className="item-split">
+                        {cartItems.map(item => (
+                          <div className="split-line" key={`mobile-split-${item.name}`}>
+                            <div>
+                              <strong>{item.name}</strong>
+                              <span>{item.quantity} adet · {formatPrice(item.price)}</span>
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.quantity}
+                              value={splitSelections[item.name] || 0}
+                              onChange={event => setSplitItemQuantity(item, event.target.value)}
+                            />
+                          </div>
+                        ))}
+
+                        <div className="split-total">
+                          <span>Ödenecek Ara Toplam</span>
+                          <strong>{formatPrice(splitSelectedTotal)}</strong>
+                        </div>
+
+                        <button className="split-pay" onClick={paySelectedSplitItems}>
+                          Seçilenleri Öde
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {weightedProduct && (
         <div className="weighted-overlay">
