@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -19,6 +19,41 @@ const isWeightedCartItem = item =>
   item.product?.unit_type === "weighted" || / - \d+([.,]\d+)? TL$/.test(item.name);
 
 const getWeightedBaseName = item => item.name.replace(/ - \d+([.,]\d+)? TL$/, "");
+
+const emptyExpiryForm = {
+  product_name: "",
+  quantity: "1",
+  location: "Dolap",
+  expiry_date: "",
+  note: "",
+  active: true
+};
+
+const parseDateOnly = value => {
+  const [year, month, day] = String(value || "").split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const getExpiryDaysLeft = value => {
+  const expiry = parseDateOnly(value);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((expiry - today) / 86400000);
+};
+
+const getExpiryLabel = days => {
+  if (days < 0) return `${Math.abs(days)} gün geçti`;
+  if (days === 0) return "Bugün son gün";
+  return `${days} gün kaldı`;
+};
+
+const getExpiryTone = days => {
+  if (days < 0) return "expired";
+  if (days === 0) return "today";
+  if ([1, 2, 3, 7].includes(days)) return `days-${days}`;
+  if (days <= 7) return "approaching";
+  return "safe";
+};
 
 function App() {
   const panelPassword = import.meta.env.VITE_PANEL_PASSWORD || "1234";
@@ -77,6 +112,11 @@ function App() {
   const [historyDate, setHistoryDate] = useState(() => getDateInputValue(new Date()));
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [historyStatus, setHistoryStatus] = useState("");
+  const [expiryItems, setExpiryItems] = useState([]);
+  const [expiryForm, setExpiryForm] = useState(emptyExpiryForm);
+  const [editingExpiryId, setEditingExpiryId] = useState(null);
+  const [expiryStatus, setExpiryStatus] = useState("");
+  const [expirySaving, setExpirySaving] = useState(false);
 
   function handleLogin(event) {
   event.preventDefault();
@@ -109,6 +149,7 @@ function App() {
   useEffect(() => {
   loadProducts();
   loadOpenOrders();
+  loadExpiryItems();
 }, []);
 
   useEffect(() => {
@@ -313,6 +354,23 @@ async function clearOrder(orderId) {
       .filter(product => product.active !== false && Number(product.stock || 0) <= 5)
       .sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0));
   }, [products]);
+
+  const expirySummary = useMemo(() => {
+    const activeItems = expiryItems.filter(item => item.active !== false);
+    return {
+      approaching: activeItems.filter(item => {
+        const days = getExpiryDaysLeft(item.expiry_date);
+        return days >= 0 && days <= 7;
+      }).length,
+      expired: activeItems.filter(item => getExpiryDaysLeft(item.expiry_date) < 0).length
+    };
+  }, [expiryItems]);
+
+  const sortedExpiryItems = useMemo(() => {
+    return [...expiryItems].sort((a, b) =>
+      a.expiry_date.localeCompare(b.expiry_date) || a.product_name.localeCompare(b.product_name, "tr")
+    );
+  }, [expiryItems]);
 
   const stockEntryProducts = useMemo(() => {
     const normalizedSearch = stockSearchTerm.trim().toLowerCase();
@@ -599,6 +657,100 @@ async function clearOrder(orderId) {
   function openOrderHistory() {
   setScreen("order-history");
   loadOrderHistory(historyFilter, historyDate);
+}
+
+  async function loadExpiryItems() {
+  const { data, error } = await supabase
+    .from("expiry_items")
+    .select("*")
+    .order("expiry_date", { ascending: true });
+
+  if (error) {
+    console.error("Expiry items could not be loaded", error);
+    setExpiryStatus("SKT kayıtları alınamadı. Supabase tablosunu kontrol edin.");
+    return;
+  }
+
+  setExpiryItems(data || []);
+}
+
+  function resetExpiryForm() {
+  setEditingExpiryId(null);
+  setExpiryForm(emptyExpiryForm);
+  setExpiryStatus("");
+}
+
+  function editExpiryItem(item) {
+  setEditingExpiryId(item.id);
+  setExpiryForm({
+    product_name: item.product_name || "",
+    quantity: String(item.quantity ?? 1),
+    location: item.location || "Dolap",
+    expiry_date: item.expiry_date || "",
+    note: item.note || "",
+    active: item.active !== false
+  });
+  setExpiryStatus("");
+}
+
+  async function saveExpiryItem(event) {
+  event.preventDefault();
+  const productName = expiryForm.product_name.trim();
+  const quantity = Number(expiryForm.quantity);
+
+  if (!productName || !expiryForm.expiry_date) {
+    setExpiryStatus("Ürün adı ve son kullanma tarihi zorunlu.");
+    return;
+  }
+  if (!Number.isInteger(quantity) || quantity < 0) {
+    setExpiryStatus("Adet 0 veya daha büyük bir tam sayı olmalı.");
+    return;
+  }
+
+  setExpirySaving(true);
+  setExpiryStatus("Kaydediliyor...");
+  const payload = {
+    product_name: productName,
+    quantity,
+    location: expiryForm.location,
+    expiry_date: expiryForm.expiry_date,
+    note: expiryForm.note.trim() || null,
+    active: expiryForm.active
+  };
+  const query = editingExpiryId
+    ? supabase.from("expiry_items").update(payload).eq("id", editingExpiryId)
+    : supabase.from("expiry_items").insert(payload);
+  const { error } = await query;
+
+  if (error) {
+    console.error("Expiry item could not be saved", error);
+    setExpiryStatus("SKT kaydı kaydedilemedi.");
+    setExpirySaving(false);
+    return;
+  }
+
+  await loadExpiryItems();
+  setEditingExpiryId(null);
+  setExpiryForm(emptyExpiryForm);
+  setExpiryStatus("SKT kaydı kaydedildi.");
+  setExpirySaving(false);
+}
+
+  async function toggleExpiryActive(item) {
+  setExpiryStatus("Güncelleniyor...");
+  const { error } = await supabase
+    .from("expiry_items")
+    .update({ active: item.active === false })
+    .eq("id", item.id);
+
+  if (error) {
+    console.error("Expiry item could not be updated", error);
+    setExpiryStatus("Kayıt durumu güncellenemedi.");
+    return;
+  }
+
+  await loadExpiryItems();
+  setExpiryStatus("Kayıt durumu güncellendi.");
 }
 
   function resetProductForm() {
@@ -1488,6 +1640,9 @@ async function clearOrder(orderId) {
               <button className="stock-button" onClick={() => setScreen("stock-entry")}>
                 Stok Girişi
               </button>
+              <button className="expiry-button" onClick={() => setScreen("expiry-tracking")}>
+                <CalendarClock size={18} /> SKT Takip
+              </button>
             </div>
             <button className="logout-button" onClick={logout}>Çıkış Yap</button>
             <ClipboardList className="brand-mark" size={34} />
@@ -1549,7 +1704,11 @@ async function clearOrder(orderId) {
               <button className="stat-card" onClick={() => setScreen("critical-stock")}>
                 <b>{criticalStockProducts.length}</b><span>Kritik Stok</span>
               </button>
-              <div><b>Hazır</b><span>Sistem</span></div>
+              <button className="stat-card expiry-stat" onClick={() => setScreen("expiry-tracking")}>
+                <span className="stat-heading"><CalendarClock size={17} /> SKT Uyarıları</span>
+                <span><b>{expirySummary.approaching}</b> yaklaşan</span>
+                <span><b className="danger-count">{expirySummary.expired}</b> tarihi geçen</span>
+              </button>
             </section>
           </aside>
         </main>
@@ -1743,6 +1902,128 @@ async function clearOrder(orderId) {
                 </div>
               </div>
             ))}
+          </section>
+        </section>
+      </div>
+    );
+  }
+
+  if (screen === "expiry-tracking") {
+    return (
+      <div className="app expiry-management">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>SKT Takip</h1>
+            <p>Son kullanma tarihi yaklaşan ürünler</p>
+          </div>
+        </header>
+
+        <section className="expiry-summary">
+          <div><CalendarClock /><span>7 gün içinde</span><b>{expirySummary.approaching}</b></div>
+          <div className="expired"><AlertTriangle /><span>Tarihi geçen</span><b>{expirySummary.expired}</b></div>
+        </section>
+
+        <section className="product-admin-layout expiry-admin-layout">
+          <form className="product-form expiry-form" onSubmit={saveExpiryItem}>
+            <h2>{editingExpiryId ? "Kaydı Düzenle" : "Ürün Ekle"}</h2>
+
+            <label>
+              Ürün adı
+              <input
+                value={expiryForm.product_name}
+                onChange={event => setExpiryForm(prev => ({ ...prev, product_name: event.target.value }))}
+                placeholder="Örn. Süt"
+              />
+            </label>
+
+            <div className="form-grid">
+              <label>
+                Adet
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={expiryForm.quantity}
+                  onChange={event => setExpiryForm(prev => ({ ...prev, quantity: event.target.value }))}
+                />
+              </label>
+              <label>
+                Konum
+                <select
+                  value={expiryForm.location}
+                  onChange={event => setExpiryForm(prev => ({ ...prev, location: event.target.value }))}
+                >
+                  <option>Dolap</option>
+                  <option>Depo</option>
+                  <option>Tezgah</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              Son kullanma tarihi
+              <input
+                type="date"
+                value={expiryForm.expiry_date}
+                onChange={event => setExpiryForm(prev => ({ ...prev, expiry_date: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Not
+              <textarea
+                value={expiryForm.note}
+                onChange={event => setExpiryForm(prev => ({ ...prev, note: event.target.value }))}
+                placeholder="İsteğe bağlı not"
+              />
+            </label>
+
+            <label className="switch-row">
+              <input
+                type="checkbox"
+                checked={expiryForm.active}
+                onChange={event => setExpiryForm(prev => ({ ...prev, active: event.target.checked }))}
+              />
+              Aktif kayıt
+            </label>
+
+            {expiryStatus && <p className="status">{expiryStatus}</p>}
+            <div className="form-actions">
+              <button type="submit" disabled={expirySaving}>
+                <Save size={18} /> {expirySaving ? "Kaydediliyor" : "Kaydet"}
+              </button>
+              <button type="button" onClick={resetExpiryForm}>Temizle</button>
+            </div>
+          </form>
+
+          <section className="expiry-list">
+            {sortedExpiryItems.length === 0 && <p className="empty">Henüz SKT kaydı yok.</p>}
+            {sortedExpiryItems.map(item => {
+              const daysLeft = getExpiryDaysLeft(item.expiry_date);
+              return (
+                <article className={`expiry-row ${getExpiryTone(daysLeft)} ${item.active === false ? "inactive" : ""}`} key={item.id}>
+                  <div className="expiry-row-head">
+                    <div>
+                      <strong>{item.product_name}</strong>
+                      <span>{item.quantity} adet · {item.location}</span>
+                    </div>
+                    <b>{getExpiryLabel(daysLeft)}</b>
+                  </div>
+                  <div className="expiry-row-meta">
+                    <span>SKT: {parseDateOnly(item.expiry_date).toLocaleDateString("tr-TR")}</span>
+                    <em>{item.active === false ? "Pasif" : "Aktif"}</em>
+                  </div>
+                  {item.note && <p>{item.note}</p>}
+                  <div className="product-row-actions">
+                    <button onClick={() => editExpiryItem(item)}>Düzenle</button>
+                    <button onClick={() => toggleExpiryActive(item)}>
+                      {item.active === false ? "Aktif Yap" : "Pasif Yap"}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </section>
         </section>
       </div>
