@@ -1,4 +1,4 @@
-const { createClient } = require("@supabase/supabase-js");
+import { createClient } from "@supabase/supabase-js";
 
 const TARGET_DAYS = new Set([0, 1, 2, 3, 7]);
 
@@ -34,7 +34,7 @@ function formatMessage(items, today) {
   return [`⚠️ Saray Kafe SKT Uyarısı`, "", ...lines].join("\n");
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const cronSecret = process.env.CRON_SECRET;
