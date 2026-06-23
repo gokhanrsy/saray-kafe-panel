@@ -1521,32 +1521,54 @@ async function clearOrder(orderId) {
   let orderWasPending = Boolean(orderId);
 
   if (cartItems.length === 0) {
+    if (markPaid) {
+      if (!silent) setStatus("Ödeme almak için önce ürün ekle.");
+      return;
+    }
+
     if (!orderId) {
       const existingOrder = await findPendingOrderByTable(selectedTable);
       orderId = existingOrder?.id;
     }
 
     if (!orderId) {
-      if (!silent) setStatus("Once masa ve urun sec.");
+      if (!silent) setStatus("Henüz ürün yok.");
       return;
     }
 
-    const cleared = await clearOrder(orderId);
+    const { error: deleteItemsError } = await supabase
+      .from("order_items")
+      .delete()
+      .eq("order_id", orderId);
 
-    if (!cleared) return;
+    if (deleteItemsError) {
+      console.error(deleteItemsError);
+      if (!silent) setStatus("Adisyon ürünleri temizlenemedi.");
+      return;
+    }
+
+    const { error: updateOrderError } = await supabase
+      .from("orders")
+      .update({
+        total_price: 0,
+        paid: false,
+        status: "pending",
+        note: orderNote.trim()
+      })
+      .eq("id", orderId);
+
+    if (updateOrderError) {
+      console.error(updateOrderError);
+      if (!silent) setStatus("Boş adisyon kaydedilemedi.");
+      return;
+    }
 
     setCart({});
-    setCurrentOrderId(null);
-    setIsCurrentOrderPending(false);
-    setSelectedTable(null);
-    setOrderNote("");
-    setTransferMode(false);
-    setSplitMode(false);
+    setCurrentOrderId(orderId);
+    setIsCurrentOrderPending(true);
     setSplitSelections({});
-    setMobileCartOpen(false);
-    setStatus("");
+    if (!silent) setStatus("Henüz ürün yok. Masa açık kaldı.");
     await loadOpenOrders();
-    setScreen("tables");
     return;
   }
 

@@ -14,7 +14,7 @@
 html{
   min-height:100%;
   background:#0b0f13;
-  overscroll-behavior:none;
+  overscroll-behavior-y:auto;
 }
 
 body{
@@ -5259,6 +5259,27 @@ body{
     color:var(--text);
     background:rgba(255,255,255,.07);
   }
+}
+
+/* Allow native mobile pull-to-refresh on the order screen */
+html,
+body,
+#root{
+  overscroll-behavior-y:auto;
+}
+
+.order-layout,
+.order-layout .products,
+.order-filter-panel,
+.order-layout .product-card,
+.quick-add-card{
+  overscroll-behavior-y:auto;
+  touch-action:pan-y manipulation;
+}
+
+.order-layout .quick-add-card::after{
+  content:none;
+  display:none;
 }
 
 /* Dashboard layout cleanup */
