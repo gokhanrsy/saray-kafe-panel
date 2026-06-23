@@ -336,11 +336,16 @@ async function clearOrder(orderId) {
         ? activeProducts
         : activeProducts.filter(product => product.category === category);
 
-    if (!normalizedSearch) return categoryProducts;
+    const visibleProducts = !normalizedSearch
+      ? categoryProducts
+      : categoryProducts.filter(product =>
+        product.name?.toLowerCase().includes(normalizedSearch) ||
+        product.category?.toLowerCase().includes(normalizedSearch)
+      );
 
-    return categoryProducts.filter(product =>
-      product.name?.toLowerCase().includes(normalizedSearch) ||
-      product.category?.toLowerCase().includes(normalizedSearch)
+    return [...visibleProducts].sort((a, b) =>
+      Number(b.favorite === true) - Number(a.favorite === true) ||
+      (a.name || "").localeCompare(b.name || "", "tr")
     );
   }, [products, category, searchTerm]);
 
@@ -2689,7 +2694,6 @@ async function clearOrder(orderId) {
                   <b>{formatPrice(product.price)}{product.unit_type === "weighted" ? " / kg" : ""}</b>
                 </div>
                 {product.favorite === true && <span className="favorite-dot"><Star size={13} fill="currentColor" /></span>}
-                <span className="add-dot">+</span>
                 {qty > 0 && <em className="product-qty">{qty}</em>}
               </button>
             );
