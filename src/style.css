@@ -4522,6 +4522,18 @@ body{
   background:rgba(243,154,34,.1);
 }
 
+.header-meta button{
+  display:inline-flex;
+  align-items:center;
+  min-height:34px;
+  padding:0 12px;
+  border:1px solid rgba(243,154,34,.24);
+  border-radius:999px;
+  color:#ffe2a1;
+  background:rgba(243,154,34,.1);
+  font-weight:900;
+}
+
 .dashboard-summary{
   display:grid;
   grid-template-columns:repeat(4,minmax(0,1fr));
@@ -5289,6 +5301,106 @@ body,
 .order-layout .quick-add-card::after{
   content:none;
   display:none;
+}
+
+/* Mobile adisyon usability fixes */
+@media(max-width:719px){
+  .order-layout .products{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px;
+    padding-bottom:118px;
+  }
+
+  .order-layout .product-card{
+    min-height:84px;
+    overflow:visible;
+    grid-template-columns:1fr;
+    align-items:start;
+    padding:10px;
+    padding-right:42px;
+  }
+
+  .order-layout .product-card strong{
+    min-height:36px;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+    font-size:14px;
+    line-height:1.25;
+  }
+
+  .order-layout .product-card b{
+    margin-top:6px;
+    font-size:13px;
+  }
+
+  .order-layout .product-qty{
+    top:8px;
+    right:8px;
+    min-width:32px;
+    height:24px;
+    padding:0 8px;
+    border-radius:999px;
+    font-size:12px;
+    line-height:1;
+  }
+
+  .order-layout .product-qty::before{
+    content:"x";
+  }
+
+  .order-layout .add-dot{
+    position:absolute;
+    right:8px;
+    bottom:8px;
+    width:30px;
+    height:30px;
+    border-radius:10px;
+    font-size:19px;
+  }
+
+  .order-layout .favorite-dot{
+    left:9px;
+    right:auto;
+    top:auto;
+    bottom:9px;
+  }
+
+  .mobile-cart-bar{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto auto;
+    align-items:center;
+  }
+
+  .mobile-pay-button,
+  .mobile-detail-button{
+    display:inline-flex!important;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .order-layout .cart{
+    display:flex!important;
+    overflow:auto;
+  }
+
+  .order-layout .cart-line{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+
+  .order-layout .cart-line > span{
+    overflow-wrap:anywhere;
+  }
+
+  .order-layout .cart-line-actions{
+    display:grid;
+    grid-template-columns:40px 42px 40px minmax(54px,1fr);
+  }
+
+  .order-layout .cart-line-actions .danger{
+    margin-left:0;
+  }
 }
 
 /* Dashboard layout cleanup */

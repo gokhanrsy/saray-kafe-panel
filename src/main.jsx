@@ -1888,7 +1888,7 @@ async function clearOrder(orderId) {
             </div>
             <div className="header-meta">
               <span>{todayHeaderLabel}</span>
-              <b>İşletme Paneli</b>
+              <button onClick={() => goToScreen("tables")}>İşletme Paneli</button>
             </div>
           </header>
 
