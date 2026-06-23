@@ -5420,6 +5420,120 @@ body,
   }
 }
 
+/* Compact product cards: clean favorite, qty and add controls */
+.order-layout .product-card{
+  min-height:76px;
+  padding:11px;
+  padding-right:42px;
+  overflow:visible;
+}
+
+.order-layout .product-card > div:first-child{
+  min-width:0;
+}
+
+.order-layout .product-card.is-favorite > div:first-child{
+  padding-right:20px;
+}
+
+.order-layout .product-card strong{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+.order-layout .favorite-dot{
+  top:8px;
+  right:8px;
+  left:auto;
+  bottom:auto;
+  width:16px;
+  height:16px;
+  display:grid;
+  place-items:center;
+  color:#ffd36b;
+}
+
+.order-layout .favorite-dot svg{
+  width:12px;
+  height:12px;
+}
+
+.order-layout .product-qty{
+  top:8px;
+  right:8px;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  font-size:11px;
+  line-height:1;
+  box-shadow:none;
+}
+
+.order-layout .product-card.is-favorite .product-qty{
+  right:28px;
+}
+
+.order-layout .product-qty::before{
+  content:none!important;
+}
+
+.order-layout .add-dot{
+  width:26px;
+  height:26px;
+  right:8px;
+  bottom:8px;
+  border-radius:9px;
+  font-size:17px;
+}
+
+@media(max-width:719px){
+  .order-layout .product-card{
+    min-height:68px;
+    padding:9px;
+    padding-right:36px;
+  }
+
+  .order-layout .product-card.is-favorite > div:first-child{
+    padding-right:18px;
+  }
+
+  .order-layout .product-card strong{
+    min-height:0;
+    font-size:13px;
+    line-height:1.2;
+  }
+
+  .order-layout .product-card b{
+    margin-top:5px;
+    font-size:12px;
+  }
+
+  .order-layout .favorite-dot{
+    top:7px;
+    right:7px;
+  }
+
+  .order-layout .product-qty{
+    top:7px;
+    right:7px;
+  }
+
+  .order-layout .product-card.is-favorite .product-qty{
+    right:27px;
+  }
+
+  .order-layout .add-dot{
+    width:24px;
+    height:24px;
+    right:7px;
+    bottom:7px;
+    font-size:16px;
+  }
+}
+
 /* Dashboard layout cleanup */
 .app{
   max-width:1520px;
