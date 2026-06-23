@@ -4383,6 +4383,15 @@ body{
   border:1px solid rgba(255,255,255,.08);
   border-radius:20px;
   background:rgba(255,255,255,.045);
+  cursor:pointer;
+  user-select:none;
+}
+
+.sidebar-brand:hover,
+.sidebar-brand:focus-visible{
+  border-color:rgba(243,154,34,.34);
+  background:rgba(243,154,34,.08);
+  outline:none;
 }
 
 .sidebar-brand > span{
@@ -4532,6 +4541,14 @@ body{
   color:#ffe2a1;
   background:rgba(243,154,34,.1);
   font-weight:900;
+  cursor:pointer;
+}
+
+.header-meta button:hover,
+.header-meta button:focus-visible{
+  border-color:rgba(243,154,34,.5);
+  background:rgba(243,154,34,.18);
+  outline:none;
 }
 
 .dashboard-summary{

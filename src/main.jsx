@@ -1789,6 +1789,14 @@ async function clearOrder(orderId) {
   setScreen(nextScreen);
 }
 
+  function goToDashboard() {
+  setMobileNavOpen(false);
+  setReport(null);
+  setMobileCartOpen(false);
+  setMobileActionsOpen(false);
+  setScreen("tables");
+}
+
   function openSalesReportFromNav() {
   setMobileNavOpen(false);
   setScreen("tables");
@@ -1797,7 +1805,7 @@ async function clearOrder(orderId) {
 
   function renderSidebar() {
   const navItems = [
-    { label: "Masalar", icon: Coffee, action: () => goToScreen("tables"), active: screen === "tables" },
+    { label: "Masalar", icon: Coffee, action: goToDashboard, active: screen === "tables" },
     { label: "Gün Sonu", icon: WalletCards, action: openDailyRevenueScreen, active: screen === "daily-revenue" },
     { label: "Satış Raporları", icon: BarChart3, action: openSalesReportFromNav, active: Boolean(report) },
     { label: "Sipariş Geçmişi", icon: ClipboardList, action: openOrderHistory, active: screen === "order-history" },
@@ -1813,13 +1821,27 @@ async function clearOrder(orderId) {
       </button>
       {mobileNavOpen && <button className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} aria-label="Menüyü kapat" />}
       <aside className={`app-sidebar ${mobileNavOpen ? "open" : ""}`}>
-        <div className="sidebar-brand">
+        <div
+          className="sidebar-brand"
+          role="button"
+          tabIndex={0}
+          onClick={goToDashboard}
+          onKeyDown={event => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              goToDashboard();
+            }
+          }}
+        >
           <span><Coffee size={24} /></span>
           <div>
             <strong>Saray Kafe</strong>
             <small>Yönetim Paneli</small>
           </div>
-          <button className="sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Menüyü kapat">
+          <button className="sidebar-close" type="button" onClick={event => {
+            event.stopPropagation();
+            setMobileNavOpen(false);
+          }} aria-label="Menüyü kapat">
             <X size={18} />
           </button>
         </div>
@@ -1888,7 +1910,7 @@ async function clearOrder(orderId) {
             </div>
             <div className="header-meta">
               <span>{todayHeaderLabel}</span>
-              <button onClick={() => goToScreen("tables")}>İşletme Paneli</button>
+              <button type="button" onClick={goToDashboard}>İşletme Paneli</button>
             </div>
           </header>
 
