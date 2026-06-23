@@ -6,8 +6,16 @@ create table if not exists public.expiry_items (
   location text not null check (location in ('Dolap', 'Depo', 'Tezgah')),
   expiry_date date not null,
   active boolean not null default true,
-  note text
+  note text,
+  acknowledged_at timestamptz null,
+  acknowledged_note text null
 );
+
+alter table public.expiry_items
+  add column if not exists acknowledged_at timestamptz null;
+
+alter table public.expiry_items
+  add column if not exists acknowledged_note text null;
 
 create index if not exists expiry_items_active_date_idx
   on public.expiry_items (active, expiry_date);

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const TARGET_DAYS = new Set([0, 1, 2, 3, 7]);
+const ACK_PREFIX = "ack_expiry:";
 
 function getIstanbulDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -28,10 +29,21 @@ function formatMessage(items, today) {
   const lines = sorted.map(item => {
     const days = daysBetween(today, item.expiry_date);
     const timing = days === 0 ? "BUGÜN" : `${days} gün kaldı`;
-    return `• ${item.product_name} (${item.quantity} adet, ${item.location}) — ${timing}`;
+    return `• #${item.id} ${item.product_name} (${item.quantity} adet, ${item.location}) — ${timing}`;
   });
 
   return [`⚠️ Saray Kafe SKT Uyarısı`, "", ...lines].join("\n");
+}
+
+function buildInlineKeyboard(items) {
+  return {
+    inline_keyboard: items.map(item => [
+      {
+        text: `✅ Kaldırdım: ${item.product_name}`,
+        callback_data: `${ACK_PREFIX}${item.id}`
+      }
+    ])
+  };
 }
 
 export default async function handler(req, res) {
@@ -58,8 +70,9 @@ export default async function handler(req, res) {
     });
     const { data, error } = await supabase
       .from("expiry_items")
-      .select("product_name,quantity,location,expiry_date")
+      .select("id,product_name,quantity,location,expiry_date")
       .eq("active", true)
+      .is("acknowledged_at", null)
       .gte("expiry_date", today)
       .lte("expiry_date", addDays(today, 7));
 
@@ -73,7 +86,11 @@ export default async function handler(req, res) {
     const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: formatMessage(matches, today) })
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: formatMessage(matches, today),
+        reply_markup: buildInlineKeyboard(matches)
+      })
     });
     const telegramResult = await telegramResponse.json();
     if (!telegramResponse.ok || !telegramResult.ok) {
