@@ -89,6 +89,7 @@ function App() {
   const [splitSelections, setSplitSelections] = useState({});
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [orderNoteOpen, setOrderNoteOpen] = useState(false);
   const [autoSaveVersion, setAutoSaveVersion] = useState(0);
   const [weightedProduct, setWeightedProduct] = useState(null);
   const [weightedAmount, setWeightedAmount] = useState("");
@@ -2547,44 +2548,24 @@ async function clearOrder(orderId) {
 
   return (
     <div className="app order-layout">
-      <header className="topbar">
+      <header className="order-header">
         <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
         <div>
           <h1>{selectedTable}</h1>
-          <p>Adisyon yönetimi</p>
+          <p>{cartItems.length} ürün</p>
         </div>
+        <strong>{formatPrice(total)}</strong>
       </header>
 
-      {favoriteProducts.length > 0 && (
-        <section className="quick-products">
-          <div className="quick-head">
-            <strong>Favoriler</strong>
-            <span>Tek dokunuşla +1</span>
-          </div>
-          <div className="quick-grid">
-            {favoriteProducts.map(product => (
-              <button
-                key={product.name}
-                onClick={() => handleProductPress(product)}
-                onPointerDown={() => startFavoriteLongPress(product)}
-                onPointerUp={cancelFavoriteLongPress}
-                onPointerLeave={cancelFavoriteLongPress}
-                onPointerCancel={cancelFavoriteLongPress}
-                onContextMenu={event => {
-                  event.preventDefault();
-                  if (longPressTriggered.current) return;
-                  toggleProductFavorite(product, { source: "order" });
-                }}
-              >
-                <span>{product.name}</span>
-                <b>{formatPrice(product.price)}{product.unit_type === "weighted" ? " / kg" : ""}</b>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+      <div className="order-filter-panel">
+        <div className="category-row">
+          {categories.map(c => (
+            <button key={c} className={category === c ? "active" : ""} onClick={() => setCategory(c)}>
+              {c}
+            </button>
+          ))}
+        </div>
 
-      <div className="order-tools">
         <label className="search-box">
           <Search size={18} />
           <input
@@ -2593,14 +2574,6 @@ async function clearOrder(orderId) {
             placeholder="Ürün ara"
           />
         </label>
-      </div>
-
-      <div className="category-row">
-        {categories.map(c => (
-          <button key={c} className={category === c ? "active" : ""} onClick={() => setCategory(c)}>
-            {c}
-          </button>
-        ))}
       </div>
 
       <main className="order-main">
@@ -2626,13 +2599,10 @@ async function clearOrder(orderId) {
               >
                 <div>
                   <strong>{product.name}</strong>
-                  <span>
-                    {product.category}
-                    {product.favorite === true ? " · Favori" : ""}
-                    {product.unit_type === "weighted" ? " · Tartılı" : ""}
-                  </span>
-                  <b>{Number(product.price || 0)} ₺{product.unit_type === "weighted" ? " / kg" : ""}</b>
+                  <b>{formatPrice(product.price)}{product.unit_type === "weighted" ? " / kg" : ""}</b>
                 </div>
+                {product.favorite === true && <span className="favorite-dot"><Star size={13} fill="currentColor" /></span>}
+                <span className="add-dot">+</span>
                 {qty > 0 && <em className="product-qty">{qty}</em>}
               </button>
             );
@@ -2643,61 +2613,17 @@ async function clearOrder(orderId) {
 
         <aside className={`cart ${mobileCartOpen ? "mobile-open" : ""}`}>
           <div className="cart-head">
-            <h2>Adisyon</h2>
+            <div>
+              <h2>Adisyon</h2>
+              <span>{selectedTable} · {cartItems.length} ürün</span>
+            </div>
             <button className="cart-close" onClick={() => setMobileCartOpen(false)}>Kapat</button>
           </div>
 
-          <div className="mobile-cart-summary">
-            {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
-
-            {cartItems.slice(0, 4).map(item => (
-              <div className="mobile-cart-summary-line" key={`summary-${item.name}`}>
-                <span>
-                  {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
-                  <small>
-                    {isWeightedCartItem(item)
-                      ? `${formatPrice(item.price)} · ≈${Number(item.grams || 0) * item.quantity} g`
-                      : `${item.quantity} x ${formatPrice(item.price)}`}
-                  </small>
-                </span>
-                <b>{formatPrice(item.price * item.quantity)}</b>
-                <div className="mobile-cart-row-actions">
-                  <button onClick={() => {
-                    if (isWeightedCartItem(item)) deleteCartItem(item.name);
-                    else removeProduct(item.product);
-                  }}>-</button>
-                  {!isWeightedCartItem(item) && (
-                    <button onClick={() => addProduct(item.product)}>+</button>
-                  )}
-                  <button className="danger" onClick={() => deleteCartItem(item.name)}>Sil</button>
-                </div>
-              </div>
-            ))}
-
-            {cartItems.length > 4 && (
-              <button className="mobile-cart-more" onClick={() => setMobileActionsOpen(true)}>
-                +{cartItems.length - 4} ürün daha
-              </button>
-            )}
-          </div>
-
-          <label className="order-note desktop-cart-detail">
-            Sipariş Notu
-            <textarea
-              value={orderNote}
-              onChange={event => {
-                setOrderNote(event.target.value);
-                setAutoSaveVersion(version => version + 1);
-              }}
-              placeholder="açık çay, şekersiz, ısıtılacak, paket olsun"
-              rows={3}
-            />
-          </label>
-
-          {cartItems.length === 0 && <p className="empty desktop-cart-detail">Henüz ürün yok.</p>}
+          {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
 
           {cartItems.map(item => (
-            <div className="cart-line desktop-cart-detail" key={item.name}>
+            <div className="cart-line" key={item.name}>
               <span>
                 {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
                 <small>
@@ -2706,29 +2632,49 @@ async function clearOrder(orderId) {
                     : `${item.quantity} x ${item.price} ₺`}
                 </small>
               </span>
-              <b>{item.quantity * item.price} ₺</b>
               <div className="cart-line-actions">
-                {!isWeightedCartItem(item) && (
-                  <button onClick={() => addProduct(item.product)}>+</button>
-                )}
                 <button onClick={() => {
                   if (isWeightedCartItem(item)) deleteCartItem(item.name);
                   else removeProduct(item.product);
                 }}>-</button>
+                <em>{item.quantity}</em>
+                {!isWeightedCartItem(item) && (
+                  <button onClick={() => addProduct(item.product)}>+</button>
+                )}
                 <button className="danger" onClick={() => deleteCartItem(item.name)}>Sil</button>
               </div>
+              <b>{formatPrice(item.quantity * item.price)}</b>
             </div>
           ))}
 
+          <button className="note-toggle" onClick={() => setOrderNoteOpen(prev => !prev)}>
+            {orderNoteOpen || orderNote ? "Notu Gizle" : "Not Ekle"}
+          </button>
+
+          {(orderNoteOpen || orderNote) && (
+            <label className="order-note">
+              Sipariş Notu
+              <textarea
+                value={orderNote}
+                onChange={event => {
+                  setOrderNote(event.target.value);
+                  setAutoSaveVersion(version => version + 1);
+                }}
+                placeholder="açık çay, şekersiz, ısıtılacak, paket olsun"
+                rows={3}
+              />
+            </label>
+          )}
+
           <div className="total">
             <span>Toplam</span>
-            <strong>{total} ₺</strong>
+            <strong>{formatPrice(total)}</strong>
           </div>
 
           {status && <p className="status">{status}</p>}
 
           {isCurrentOrderPending && currentOrderId && (
-            <div className="transfer-panel desktop-cart-detail">
+            <div className="transfer-panel">
               <button className="transfer" onClick={() => setTransferMode(prev => !prev)}>
                 <ArrowRightLeft size={18} /> Masa Transferi
               </button>
@@ -2752,7 +2698,7 @@ async function clearOrder(orderId) {
           )}
 
           {isCurrentOrderPending && currentOrderId && (
-            <div className="split-panel desktop-cart-detail">
+            <div className="split-panel">
               <button className="split-toggle" onClick={() => setSplitMode(prev => !prev)}>
                 Adisyon Böl
               </button>
@@ -2822,170 +2768,22 @@ async function clearOrder(orderId) {
           <button className="pay" onClick={() => saveOrder(true)}>
             <CreditCard size={18} /> Ödeme Al
           </button>
-
-          <button className="mobile-extra-button" onClick={() => setMobileActionsOpen(true)}>
-            Ek İşlemler
-          </button>
         </aside>
       </main>
 
       <div className="mobile-cart-bar">
         <div>
           <span>Toplam</span>
-          <strong>{total} ₺</strong>
+          <strong>{formatPrice(total)}</strong>
           <small>{cartItems.length} ürün</small>
         </div>
-        <button onClick={() => setMobileCartOpen(true)}>Adisyonu Aç</button>
+        <button className="mobile-pay-button" onClick={() => saveOrder(true)}>
+          Ödeme Al
+        </button>
+        <button className="mobile-detail-button" onClick={() => setMobileCartOpen(true)}>
+          Adisyonu Gör
+        </button>
       </div>
-
-      {mobileActionsOpen && (
-        <div className="mobile-actions-overlay">
-          <section className="mobile-actions-sheet">
-            <div className="mobile-actions-head">
-              <div>
-                <h2>Ek İşlemler</h2>
-                <p>Adisyon detayları ve masa işlemleri</p>
-              </div>
-              <button onClick={() => setMobileActionsOpen(false)}>Kapat</button>
-            </div>
-
-            <label className="order-note">
-              Sipariş Notu
-              <textarea
-                value={orderNote}
-                onChange={event => {
-                  setOrderNote(event.target.value);
-                  setAutoSaveVersion(version => version + 1);
-                }}
-                placeholder="açık çay, şekersiz, ısıtılacak, paket olsun"
-                rows={3}
-              />
-            </label>
-
-            <div className="mobile-detail-section">
-              <h3>Ürünleri Düzenle</h3>
-
-              {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
-
-              {cartItems.map(item => (
-                <div className="cart-line" key={`mobile-detail-${item.name}`}>
-                  <span>
-                    {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
-                    <small>
-                      {isWeightedCartItem(item)
-                        ? `${formatPrice(item.price)} · ≈${Number(item.grams || 0) * item.quantity} g`
-                        : `${item.quantity} x ${item.price} ₺`}
-                    </small>
-                  </span>
-                  <b>{item.quantity * item.price} ₺</b>
-                  <div className="cart-line-actions">
-                    {!isWeightedCartItem(item) && (
-                      <button onClick={() => addProduct(item.product)}>+</button>
-                    )}
-                    <button onClick={() => {
-                      if (isWeightedCartItem(item)) deleteCartItem(item.name);
-                      else removeProduct(item.product);
-                    }}>-</button>
-                    <button className="danger" onClick={() => deleteCartItem(item.name)}>Sil</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {isCurrentOrderPending && currentOrderId && (
-              <div className="transfer-panel">
-                <button className="transfer" onClick={() => setTransferMode(prev => !prev)}>
-                  <ArrowRightLeft size={18} /> Masa Transferi
-                </button>
-
-                {transferMode && (
-                  <div className="transfer-targets">
-                    <span>Boş masa seç</span>
-
-                    {emptyTransferTargets.length === 0 && (
-                      <p className="empty">Transfer edilecek boş masa yok.</p>
-                    )}
-
-                    {emptyTransferTargets.map(tableName => (
-                      <button key={tableName} onClick={() => transferOrder(tableName)}>
-                        {tableName}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isCurrentOrderPending && currentOrderId && (
-              <div className="split-panel">
-                <button className="split-toggle" onClick={() => setSplitMode(prev => !prev)}>
-                  Adisyon Böl
-                </button>
-
-                {splitMode && (
-                  <div className="split-content">
-                    <div className="split-tabs">
-                      <button className={splitType === "equal" ? "active" : ""} onClick={() => setSplitType("equal")}>
-                        Eşit Böl
-                      </button>
-                      <button className={splitType === "items" ? "active" : ""} onClick={() => setSplitType("items")}>
-                        Ürün Seçerek Öde
-                      </button>
-                    </div>
-
-                    {splitType === "equal" && (
-                      <div className="equal-split">
-                        <label>
-                          Kişi sayısı
-                          <input
-                            type="number"
-                            min="1"
-                            value={splitPeople}
-                            onChange={event => setSplitPeople(Math.max(1, Number(event.target.value || 1)))}
-                          />
-                        </label>
-                        <div>
-                          <span>Kişi başı</span>
-                          <strong>{formatPrice(total / Math.max(1, splitPeople))}</strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {splitType === "items" && (
-                      <div className="item-split">
-                        {cartItems.map(item => (
-                          <div className="split-line" key={`mobile-split-${item.name}`}>
-                            <div>
-                              <strong>{item.name}</strong>
-                              <span>{item.quantity} adet · {formatPrice(item.price)}</span>
-                            </div>
-                            <input
-                              type="number"
-                              min="0"
-                              max={item.quantity}
-                              value={splitSelections[item.name] || 0}
-                              onChange={event => setSplitItemQuantity(item, event.target.value)}
-                            />
-                          </div>
-                        ))}
-
-                        <div className="split-total">
-                          <span>Ödenecek Ara Toplam</span>
-                          <strong>{formatPrice(splitSelectedTotal)}</strong>
-                        </div>
-
-                        <button className="split-pay" onClick={paySelectedSplitItems}>
-                          Seçilenleri Öde
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
 
       {weightedProduct && (
         <div className="weighted-overlay">
