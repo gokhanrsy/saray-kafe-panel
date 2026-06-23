@@ -2169,10 +2169,10 @@ async function clearOrder(orderId) {
                 </div>
                 <b>{formatPrice(product.price)}</b>
                 <em>{Number(product.stock || 0)} stok</em>
-                <small>
-                  {product.active === false ? "Pasif" : "Aktif"}
-                  {product.favorite === true ? " · Favori" : ""}
-                  {product.unit_type === "weighted" ? " · Tartılı" : ""}
+                <small className="product-badges">
+                  <span>{product.active === false ? "Pasif" : "Aktif"}</span>
+                  {product.favorite === true && <span>Favori</span>}
+                  <span>{product.unit_type === "weighted" ? "Tartılı" : "Adetli"}</span>
                 </small>
                 <div className="product-row-actions">
                   <button
