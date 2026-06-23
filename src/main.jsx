@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards, Menu, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -129,6 +129,7 @@ function App() {
   const [dailyRevenues, setDailyRevenues] = useState([]);
   const [dailyRevenueStatus, setDailyRevenueStatus] = useState("");
   const [dailyRevenueSaving, setDailyRevenueSaving] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   function handleLogin(event) {
   event.preventDefault();
@@ -162,6 +163,7 @@ function App() {
   loadProducts();
   loadOpenOrders();
   loadExpiryItems();
+  loadDailyRevenues();
 }, []);
 
   useEffect(() => {
@@ -377,6 +379,27 @@ async function clearOrder(orderId) {
       expired: activeItems.filter(item => getExpiryDaysLeft(item.expiry_date) < 0).length
     };
   }, [expiryItems]);
+
+  const todayExpiryCount = useMemo(() => {
+    return expiryItems.filter(item =>
+      item.active !== false && getExpiryDaysLeft(item.expiry_date) === 0
+    ).length;
+  }, [expiryItems]);
+
+  const todayRevenueTotal = useMemo(() => {
+    const todayValue = getDateInputValue(new Date());
+    const todayRecord = dailyRevenues.find(record => record.revenue_date === todayValue);
+    return Number(todayRecord?.total_amount || 0);
+  }, [dailyRevenues]);
+
+  const todayHeaderLabel = useMemo(() => {
+    return new Date().toLocaleDateString("tr-TR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric"
+    });
+  }, []);
 
   const sortedExpiryItems = useMemo(() => {
     return [...expiryItems].sort((a, b) =>
@@ -674,11 +697,13 @@ async function clearOrder(orderId) {
 }
 
   function openOrderHistory() {
+  setMobileNavOpen(false);
   setScreen("order-history");
   loadOrderHistory(historyFilter, historyDate);
 }
 
   function openDailyRevenueScreen() {
+  setMobileNavOpen(false);
   setScreen("daily-revenue");
   loadDailyRevenues();
 }
@@ -1692,6 +1717,71 @@ async function clearOrder(orderId) {
   await loadOpenOrders();
 }
 
+  function goToScreen(nextScreen) {
+  setMobileNavOpen(false);
+  setReport(null);
+  setScreen(nextScreen);
+}
+
+  function openSalesReportFromNav() {
+  setMobileNavOpen(false);
+  setScreen("tables");
+  loadEndOfDayReport();
+}
+
+  function renderSidebar() {
+  const navItems = [
+    { label: "Masalar", icon: Coffee, action: () => goToScreen("tables"), active: screen === "tables" },
+    { label: "Gün Sonu", icon: WalletCards, action: openDailyRevenueScreen, active: screen === "daily-revenue" },
+    { label: "Satış Raporları", icon: BarChart3, action: openSalesReportFromNav, active: Boolean(report) },
+    { label: "Sipariş Geçmişi", icon: ClipboardList, action: openOrderHistory, active: screen === "order-history" },
+    { label: "Ürünler", icon: Boxes, action: () => goToScreen("products"), active: screen === "products" },
+    { label: "Stok Girişi", icon: Package, action: () => goToScreen("stock-entry"), active: screen === "stock-entry" },
+    { label: "SKT Takip", icon: CalendarClock, action: () => goToScreen("expiry-tracking"), active: screen === "expiry-tracking" }
+  ];
+
+  return (
+    <>
+      <button className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Menüyü aç">
+        <Menu size={22} />
+      </button>
+      {mobileNavOpen && <button className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} aria-label="Menüyü kapat" />}
+      <aside className={`app-sidebar ${mobileNavOpen ? "open" : ""}`}>
+        <div className="sidebar-brand">
+          <span><Coffee size={24} /></span>
+          <div>
+            <strong>Saray Kafe</strong>
+            <small>Yönetim Paneli</small>
+          </div>
+          <button className="sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Menüyü kapat">
+            <X size={18} />
+          </button>
+        </div>
+
+        <nav className="sidebar-nav">
+          {navItems.map(item => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                className={item.active ? "active" : ""}
+                onClick={item.action}
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <button className="sidebar-logout" onClick={logout}>
+          Çıkış Yap
+        </button>
+      </aside>
+    </>
+  );
+}
+
   if (!isAuthenticated) {
     return (
       <div className="app login-layout">
@@ -1720,50 +1810,49 @@ async function clearOrder(orderId) {
 
   if (screen === "tables") {
     return (
-      <div className="app">
-        <header className="topbar">
-          <div>
-            <h1>Saray Kafe Yönetim Paneli</h1>
-            <p>Masa, stok ve rapor takibi</p>
-          </div>
-          <div className="topbar-actions grouped-actions">
-            <div className="action-group">
-              <span>Raporlar</span>
-              <button className="daily-revenue-button" onClick={openDailyRevenueScreen}>
-                <WalletCards size={18} /> Gün Sonu
-              </button>
-              <button className="report-button" onClick={() => loadEndOfDayReport()} disabled={reportLoading}>
-                <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Satış Raporları"}
-              </button>
-              <button className="report-button" onClick={openOrderHistory}>
-                <ClipboardList size={18} /> Sipariş Geçmişi
-              </button>
-            </div>
-            <div className="action-group">
-              <span>Yönetim</span>
-              <button className="manage-button" onClick={() => setScreen("products")}>
-                <Boxes size={18} /> Ürünler
-              </button>
-            </div>
-            <div className="action-group">
-              <span>Stok</span>
-              <button className="stock-button" onClick={() => setScreen("stock-entry")}>
-                Stok Girişi
-              </button>
-              <button className="expiry-button" onClick={() => setScreen("expiry-tracking")}>
-                <CalendarClock size={18} /> SKT Takip
-              </button>
-            </div>
-            <button className="logout-button" onClick={logout}>Çıkış Yap</button>
-            <ClipboardList className="brand-mark" size={34} />
-          </div>
-        </header>
+      <div className="app-shell">
+        {renderSidebar()}
 
-        <main className="dashboard-shell">
-          <section className="dashboard-main">
+        <main className="app-content">
+          <header className="dashboard-header">
+            <div>
+              <span className="eyebrow">Saray Kafe</span>
+              <h1>Masalar</h1>
+              <p>Masa, stok ve rapor takibi</p>
+            </div>
+            <div className="header-meta">
+              <span>{todayHeaderLabel}</span>
+              <b>İşletme Paneli</b>
+            </div>
+          </header>
+
+          <section className="dashboard-summary">
+            <button className="summary-card revenue" onClick={openDailyRevenueScreen}>
+              <span>Bugünkü Ciro</span>
+              <strong>{formatPrice(todayRevenueTotal)}</strong>
+              <small>Gün sonu kaydı</small>
+            </button>
+            <button className="summary-card orders" onClick={() => goToScreen("tables")}>
+              <span>Açık Adisyon</span>
+              <strong>{openOrders.length}</strong>
+              <small>Aktif masa / sipariş</small>
+            </button>
+            <button className="summary-card stock" onClick={() => goToScreen("critical-stock")}>
+              <span>Kritik Stok</span>
+              <strong>{criticalStockProducts.length}</strong>
+              <small>Kontrol gereken ürün</small>
+            </button>
+            <button className="summary-card expiry" onClick={() => goToScreen("expiry-tracking")}>
+              <span>Bugün SKT</span>
+              <strong>{todayExpiryCount}</strong>
+              <small>Bugün son gün</small>
+            </button>
+          </section>
+
+          <section className="modern-panel">
             <div className="section-title">
               <div>
-                <h2>Masalar</h2>
+                <h2>Masa Durumu</h2>
                 <p>Canlı adisyon durumları</p>
               </div>
             </div>
@@ -1807,21 +1896,6 @@ async function clearOrder(orderId) {
               })}
             </section>
           </section>
-
-          <aside className="dashboard-side">
-            <section className="stats">
-              <div><b>{products.length}</b><span>Ürün</span></div>
-              <button className="stat-card" onClick={() => setScreen("critical-stock")}>
-                <b>{criticalStockProducts.length}</b><span>Kritik Stok</span>
-              </button>
-              <button className="stat-card expiry-stat" onClick={() => setScreen("expiry-tracking")}>
-                <span className="stat-heading"><CalendarClock size={17} /> SKT Uyarıları</span>
-                <span><b>{expirySummary.approaching}</b> yaklaşan</span>
-                <span><b className="danger-count">{expirySummary.expired}</b> tarihi geçen</span>
-              </button>
-            </section>
-          </aside>
-        </main>
 
         {report && (
           <section className="report-panel">
@@ -1883,6 +1957,7 @@ async function clearOrder(orderId) {
             </div>
           </section>
         )}
+        </main>
       </div>
     );
   }
