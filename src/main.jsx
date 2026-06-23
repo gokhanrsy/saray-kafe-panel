@@ -215,6 +215,30 @@ function App() {
   };
 }, []);
 
+  useEffect(() => {
+  if (!mobileCartOpen) return undefined;
+
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  const handleKeyDown = event => {
+    if (event.key === "Escape") {
+      setMobileCartOpen(false);
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    document.body.style.overflow = previousOverflow;
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [mobileCartOpen]);
+
+  function toggleMobileCart() {
+  setMobileCartOpen(open => !open);
+}
+
   async function loadProducts() {
   const { data, error } = await supabase
     .from("products")
@@ -2717,7 +2741,9 @@ async function clearOrder(orderId) {
               <h2>Adisyon</h2>
               <span>{selectedTable} · {cartItems.length} ürün</span>
             </div>
-            <button className="cart-close" onClick={() => setMobileCartOpen(false)}>Kapat</button>
+            <button className="cart-close" onClick={() => setMobileCartOpen(false)} aria-label="Adisyonu kapat">
+              <X size={22} />
+            </button>
           </div>
 
           {cartItems.length === 0 && <p className="empty">Henüz ürün yok.</p>}
@@ -2880,8 +2906,8 @@ async function clearOrder(orderId) {
         <button className="mobile-pay-button" onClick={() => saveOrder(true)}>
           Ödeme Al
         </button>
-        <button className="mobile-detail-button" onClick={() => setMobileCartOpen(true)}>
-          Adisyonu Gör
+        <button className="mobile-detail-button" onClick={toggleMobileCart}>
+          {mobileCartOpen ? "Kapat" : "Adisyonu Gör"}
         </button>
       </div>
 

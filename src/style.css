@@ -5239,11 +5239,13 @@ body{
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    min-height:38px;
+    width:46px;
+    height:46px;
+    min-height:46px;
     border:1px solid rgba(255,255,255,.1);
-    border-radius:12px;
+    border-radius:16px;
     color:var(--text);
-    background:rgba(255,255,255,.06);
+    background:rgba(255,255,255,.09);
     font-weight:900;
   }
 
@@ -5903,6 +5905,53 @@ body,
 
   .product-management .form-grid{
     grid-template-columns:1fr;
+  }
+}
+
+/* Reliable mobile cart sheet controls */
+@media(max-width:719px){
+  .mobile-cart-backdrop{
+    display:block!important;
+    position:fixed;
+    inset:0;
+    z-index:88;
+    border:0;
+    background:rgba(0,0,0,.62);
+  }
+
+  .order-layout .cart{
+    z-index:92;
+  }
+
+  .order-layout .cart.mobile-open{
+    transform:translateY(0)!important;
+    opacity:1!important;
+    visibility:visible!important;
+    pointer-events:auto!important;
+  }
+
+  .order-layout .cart-head{
+    position:sticky;
+    top:0;
+    z-index:3;
+    margin:-14px -14px 8px;
+    padding:14px;
+    background:rgba(12,18,24,.98);
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+
+  .order-layout .cart-close{
+    display:inline-flex!important;
+    align-items:center;
+    justify-content:center;
+    width:48px;
+    height:48px;
+    min-width:48px;
+    min-height:48px;
+    padding:0;
+    border-radius:16px;
+    color:#fff;
+    background:rgba(255,255,255,.1);
   }
 }
 
