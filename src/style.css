@@ -1563,7 +1563,8 @@ body{
 }
 
 .weighted-sheet label{
-  display:block;
+  display:grid;
+  gap:7px;
   margin-bottom:7px;
   color:var(--muted);
   font-size:13px;
@@ -1586,6 +1587,14 @@ body{
   color:var(--primary);
   font-size:22px;
   margin:14px 0;
+}
+
+.weighted-hint{
+  display:block;
+  margin:-6px 0 14px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
 }
 
 .weighted-actions{

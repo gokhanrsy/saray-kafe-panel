@@ -20,6 +20,33 @@ const isWeightedCartItem = item =>
 
 const getWeightedBaseName = item => item.name.replace(/ - \d+([.,]\d+)? TL$/, "");
 
+const parseDecimalInput = value => {
+  const normalized = String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\s/g, "")
+    .replace(",", ".")
+    .replace(/[^0-9.]/g, "");
+  const parts = normalized.split(".");
+  const safeValue = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : normalized;
+  const number = Number(safeValue);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const parseGramInput = value => {
+  const raw = String(value || "").toLocaleLowerCase("tr-TR");
+  const number = parseDecimalInput(raw);
+  return raw.includes("kg") ? number * 1000 : number;
+};
+
+const formatSmartNumber = value => {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return "";
+  return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/\.?0+$/, "");
+};
+
+const formatGramValue = value => `${formatSmartNumber(value)} g`;
+
 const emptyExpiryForm = {
   product_name: "",
   quantity: "1",
@@ -93,6 +120,7 @@ function App() {
   const [autoSaveVersion, setAutoSaveVersion] = useState(0);
   const [weightedProduct, setWeightedProduct] = useState(null);
   const [weightedAmount, setWeightedAmount] = useState("");
+  const [weightedGrams, setWeightedGrams] = useState("");
   const favoritePressTimer = useRef(null);
   const longPressTriggered = useRef(false);
   const [reportDate, setReportDate] = useState(() => getDateInputValue(new Date()));
@@ -1149,6 +1177,7 @@ async function clearOrder(orderId) {
     if (product.unit_type === "weighted") {
       setWeightedProduct(product);
       setWeightedAmount("");
+      setWeightedGrams("");
       return;
     }
 
@@ -1189,18 +1218,31 @@ async function clearOrder(orderId) {
     setAutoSaveVersion(version => version + 1);
   }
 
+  function updateWeightedAmount(value) {
+    setWeightedAmount(value);
+    const kgPrice = Number(weightedProduct?.price || 0);
+    const amount = parseDecimalInput(value);
+    setWeightedGrams(kgPrice > 0 && amount > 0 ? formatSmartNumber((amount / kgPrice) * 1000) : "");
+  }
+
+  function updateWeightedGrams(value) {
+    setWeightedGrams(value);
+    const kgPrice = Number(weightedProduct?.price || 0);
+    const grams = parseGramInput(value);
+    setWeightedAmount(kgPrice > 0 && grams > 0 ? formatSmartNumber((grams / 1000) * kgPrice) : "");
+  }
+
   function confirmWeightedProduct() {
-    const amount = Number(weightedAmount || 0);
+    const amount = parseDecimalInput(weightedAmount);
+    const grams = Math.round(parseGramInput(weightedGrams));
     const kgPrice = Number(weightedProduct?.price || 0);
 
-    if (!weightedProduct || amount <= 0 || kgPrice <= 0) {
-      setStatus("Geçerli bir tutar gir.");
+    if (!weightedProduct || amount <= 0 || grams <= 0 || kgPrice <= 0) {
+      setStatus("Geçerli bir tutar veya gram gir.");
       return;
     }
 
-    const grams = Math.round((amount / kgPrice) * 1000);
-    const amountLabel = Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
-    const cartName = `${weightedProduct.name} - ${amountLabel} TL`;
+    const cartName = weightedProduct.name;
 
     setCart(prev => {
       const current = prev[cartName];
@@ -1211,18 +1253,19 @@ async function clearOrder(orderId) {
             ...weightedProduct,
             unit_type: "weighted",
             base_name: weightedProduct.name,
-            grams
+            grams: current ? Number(current.grams || 0) + grams : grams
           },
           name: cartName,
-          price: amount,
-          quantity: current ? current.quantity + 1 : 1,
-          grams
+          price: current ? Number(current.price || 0) + amount : amount,
+          quantity: 1,
+          grams: current ? Number(current.grams || 0) + grams : grams
         }
       };
     });
 
     setWeightedProduct(null);
     setWeightedAmount("");
+    setWeightedGrams("");
     setAutoSaveVersion(version => version + 1);
   }
 
@@ -2648,11 +2691,11 @@ async function clearOrder(orderId) {
             <div className="cart-line" key={item.name}>
               <span>
                 {isWeightedCartItem(item) ? getWeightedBaseName(item) : item.name}
-                <small>
-                  {isWeightedCartItem(item)
-                    ? `${formatPrice(item.price)} · ≈${Number(item.grams || 0) * item.quantity} g`
-                    : `${item.quantity} x ${item.price} ₺`}
-                </small>
+                  <small>
+                    {isWeightedCartItem(item)
+                      ? `${formatGramValue(Number(item.grams || 0) * item.quantity)} · ${formatPrice(item.price * item.quantity)}`
+                      : `${item.quantity} x ${item.price} ₺`}
+                  </small>
               </span>
               <div className="cart-line-actions">
                 <button onClick={() => {
@@ -2816,29 +2859,41 @@ async function clearOrder(orderId) {
             </div>
 
             <label>
-              Tutar
+              Tutar (TL)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={weightedAmount}
+                onChange={event => updateWeightedAmount(event.target.value)}
+                placeholder="Örn. 500"
+                autoFocus
+              />
             </label>
 
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={weightedAmount}
-              onChange={event => setWeightedAmount(event.target.value)}
-              placeholder="Örn. 200"
-              autoFocus
-            />
+            <label>
+              Gram
+              <input
+                type="text"
+                inputMode="decimal"
+                value={weightedGrams}
+                onChange={event => updateWeightedGrams(event.target.value)}
+                placeholder="Örn. 500"
+              />
+            </label>
 
             <strong>
-              Yaklaşık {Number(weightedProduct.price || 0) > 0 && Number(weightedAmount || 0) > 0
-                ? Math.round((Number(weightedAmount || 0) / Number(weightedProduct.price || 0)) * 1000)
-                : 0} g
+              {formatPrice(parseDecimalInput(weightedAmount))} · {formatGramValue(parseGramInput(weightedGrams))}
             </strong>
+
+            <small className="weighted-hint">
+              {formatPrice(weightedProduct.price)}/kg üzerinden hesaplanır
+            </small>
 
             <div className="weighted-actions">
               <button onClick={() => {
                 setWeightedProduct(null);
                 setWeightedAmount("");
+                setWeightedGrams("");
               }}>Vazgeç</button>
               <button onClick={confirmWeightedProduct}>Adisyona Ekle</button>
             </div>
