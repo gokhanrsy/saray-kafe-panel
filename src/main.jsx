@@ -1724,7 +1724,7 @@ async function clearOrder(orderId) {
         <header className="topbar">
           <div>
             <h1>Saray Kafe Yönetim Paneli</h1>
-            <p>Masa, paket ve gel-al sipariş takibi</p>
+            <p>Masa, stok ve rapor takibi</p>
           </div>
           <div className="topbar-actions grouped-actions">
             <div className="action-group">
@@ -1733,7 +1733,7 @@ async function clearOrder(orderId) {
                 <WalletCards size={18} /> Gün Sonu
               </button>
               <button className="report-button" onClick={() => loadEndOfDayReport()} disabled={reportLoading}>
-                <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Satış Raporu"}
+                <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Satış Raporları"}
               </button>
               <button className="report-button" onClick={openOrderHistory}>
                 <ClipboardList size={18} /> Sipariş Geçmişi
