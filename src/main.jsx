@@ -203,6 +203,11 @@ function App() {
       { event: "*", schema: "public", table: "orders" },
       () => loadOpenOrders()
     )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "order_items" },
+      () => loadOpenOrders()
+    )
     .subscribe();
 
   return () => {
@@ -252,7 +257,7 @@ async function loadOpenOrders() {
 
   if (itemsError) {
     console.error(itemsError);
-    setOpenOrders(orders);
+    setOpenOrders([]);
     return;
   }
 
@@ -262,10 +267,14 @@ async function loadOpenOrders() {
     return groupedItems;
   }, {});
 
-  setOpenOrders(orders.map(order => ({
-    ...order,
-    items: itemsByOrderId[order.id] || []
-  })));
+  setOpenOrders(
+    orders
+      .map(order => ({
+        ...order,
+        items: itemsByOrderId[order.id] || []
+      }))
+      .filter(order => order.items.some(item => Number(item.quantity || 0) > 0))
+  );
 }
 
 async function findPendingOrderByTable(tableName) {
