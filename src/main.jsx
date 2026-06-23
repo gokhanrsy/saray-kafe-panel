@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -28,6 +28,14 @@ const emptyExpiryForm = {
   note: "",
   active: true
 };
+
+const createDailyRevenueForm = dateValue => ({
+  revenue_date: dateValue,
+  cash_amount: "",
+  card_amount: "",
+  other_amount: "",
+  note: ""
+});
 
 const parseDateOnly = value => {
   const [year, month, day] = String(value || "").split("-").map(Number);
@@ -117,6 +125,10 @@ function App() {
   const [editingExpiryId, setEditingExpiryId] = useState(null);
   const [expiryStatus, setExpiryStatus] = useState("");
   const [expirySaving, setExpirySaving] = useState(false);
+  const [dailyRevenueForm, setDailyRevenueForm] = useState(() => createDailyRevenueForm(getDateInputValue(new Date())));
+  const [dailyRevenues, setDailyRevenues] = useState([]);
+  const [dailyRevenueStatus, setDailyRevenueStatus] = useState("");
+  const [dailyRevenueSaving, setDailyRevenueSaving] = useState(false);
 
   function handleLogin(event) {
   event.preventDefault();
@@ -371,6 +383,13 @@ async function clearOrder(orderId) {
       a.expiry_date.localeCompare(b.expiry_date) || a.product_name.localeCompare(b.product_name, "tr")
     );
   }, [expiryItems]);
+
+  const dailyRevenueTotal = useMemo(() => {
+    return ["cash_amount", "card_amount", "other_amount"].reduce(
+      (sum, key) => sum + Number(dailyRevenueForm[key] || 0),
+      0
+    );
+  }, [dailyRevenueForm]);
 
   const stockEntryProducts = useMemo(() => {
     const normalizedSearch = stockSearchTerm.trim().toLowerCase();
@@ -657,6 +676,94 @@ async function clearOrder(orderId) {
   function openOrderHistory() {
   setScreen("order-history");
   loadOrderHistory(historyFilter, historyDate);
+}
+
+  function openDailyRevenueScreen() {
+  setScreen("daily-revenue");
+  loadDailyRevenues();
+}
+
+  async function loadDailyRevenues() {
+  const { data, error } = await supabase
+    .from("daily_revenues")
+    .select("*")
+    .order("revenue_date", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error("Daily revenues could not be loaded", error);
+    setDailyRevenueStatus("Gün sonu kayıtları alınamadı. Supabase tablosunu kontrol edin.");
+    setDailyRevenues([]);
+    return;
+  }
+
+  setDailyRevenues(data || []);
+}
+
+  function resetDailyRevenueForm() {
+  setDailyRevenueForm(createDailyRevenueForm(getDateInputValue(new Date())));
+  setDailyRevenueStatus("");
+}
+
+  async function saveDailyRevenue(event) {
+  event.preventDefault();
+
+  const cashAmount = Number(dailyRevenueForm.cash_amount || 0);
+  const cardAmount = Number(dailyRevenueForm.card_amount || 0);
+  const otherAmount = Number(dailyRevenueForm.other_amount || 0);
+
+  if (!dailyRevenueForm.revenue_date) {
+    setDailyRevenueStatus("Tarih seçmek zorunlu.");
+    return;
+  }
+
+  if ([cashAmount, cardAmount, otherAmount].some(amount => Number.isNaN(amount) || amount < 0)) {
+    setDailyRevenueStatus("Tutarlar 0 veya daha büyük olmalı.");
+    return;
+  }
+
+  setDailyRevenueSaving(true);
+  setDailyRevenueStatus("Kapanış kaydediliyor...");
+
+  const payload = {
+    revenue_date: dailyRevenueForm.revenue_date,
+    cash_amount: cashAmount,
+    card_amount: cardAmount,
+    other_amount: otherAmount,
+    total_amount: cashAmount + cardAmount + otherAmount,
+    note: dailyRevenueForm.note.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data: existingRecord, error: readError } = await supabase
+    .from("daily_revenues")
+    .select("id")
+    .eq("revenue_date", dailyRevenueForm.revenue_date)
+    .maybeSingle();
+
+  if (readError) {
+    console.error("Daily revenue lookup failed", readError);
+    setDailyRevenueStatus("Mevcut gün sonu kaydı kontrol edilemedi.");
+    setDailyRevenueSaving(false);
+    return;
+  }
+
+  const query = existingRecord?.id
+    ? supabase.from("daily_revenues").update(payload).eq("id", existingRecord.id)
+    : supabase.from("daily_revenues").insert(payload);
+
+  const { error } = await query;
+
+  if (error) {
+    console.error("Daily revenue could not be saved", error);
+    setDailyRevenueStatus("Gün sonu kapanışı kaydedilemedi.");
+    setDailyRevenueSaving(false);
+    return;
+  }
+
+  await loadDailyRevenues();
+  setDailyRevenueStatus(existingRecord?.id ? "Bu tarih için kapanış güncellendi." : "Gün sonu kapanışı kaydedildi.");
+  setDailyRevenueSaving(false);
 }
 
   async function loadExpiryItems() {
@@ -1622,8 +1729,11 @@ async function clearOrder(orderId) {
           <div className="topbar-actions grouped-actions">
             <div className="action-group">
               <span>Raporlar</span>
+              <button className="daily-revenue-button" onClick={openDailyRevenueScreen}>
+                <WalletCards size={18} /> Gün Sonu
+              </button>
               <button className="report-button" onClick={() => loadEndOfDayReport()} disabled={reportLoading}>
-                <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Gün Sonu"}
+                <BarChart3 size={18} /> {reportLoading ? "Hazırlanıyor" : "Satış Raporu"}
               </button>
               <button className="report-button" onClick={openOrderHistory}>
                 <ClipboardList size={18} /> Sipariş Geçmişi
@@ -1902,6 +2012,132 @@ async function clearOrder(orderId) {
                 </div>
               </div>
             ))}
+          </section>
+        </section>
+      </div>
+    );
+  }
+
+  if (screen === "daily-revenue") {
+    return (
+      <div className="app daily-revenue-page">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>Gün Sonu Ciro</h1>
+            <p>Nakit, kart ve diğer gelirleri kapat</p>
+          </div>
+        </header>
+
+        <section className="daily-revenue-layout">
+          <form className="product-form daily-revenue-form" onSubmit={saveDailyRevenue}>
+            <h2>Kapanış Bilgileri</h2>
+
+            <label>
+              Tarih
+              <input
+                type="date"
+                value={dailyRevenueForm.revenue_date}
+                onChange={event => setDailyRevenueForm(prev => ({ ...prev, revenue_date: event.target.value }))}
+              />
+            </label>
+
+            <div className="form-grid">
+              <label>
+                Nakit
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={dailyRevenueForm.cash_amount}
+                  onChange={event => setDailyRevenueForm(prev => ({ ...prev, cash_amount: event.target.value }))}
+                  placeholder="0"
+                />
+              </label>
+
+              <label>
+                Kart
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={dailyRevenueForm.card_amount}
+                  onChange={event => setDailyRevenueForm(prev => ({ ...prev, card_amount: event.target.value }))}
+                  placeholder="0"
+                />
+              </label>
+            </div>
+
+            <label>
+              Diğer
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={dailyRevenueForm.other_amount}
+                onChange={event => setDailyRevenueForm(prev => ({ ...prev, other_amount: event.target.value }))}
+                placeholder="0"
+              />
+            </label>
+
+            <label>
+              Not
+              <textarea
+                value={dailyRevenueForm.note}
+                onChange={event => setDailyRevenueForm(prev => ({ ...prev, note: event.target.value }))}
+                placeholder="İsteğe bağlı kapanış notu"
+              />
+            </label>
+
+            <div className="daily-total-card">
+              <span>Toplam Ciro</span>
+              <strong>{formatPrice(dailyRevenueTotal)}</strong>
+            </div>
+
+            {dailyRevenueStatus && <p className="status">{dailyRevenueStatus}</p>}
+
+            <div className="form-actions">
+              <button type="submit" disabled={dailyRevenueSaving}>
+                <Save size={18} /> {dailyRevenueSaving ? "Kaydediliyor" : "Kapanışı Kaydet"}
+              </button>
+              <button type="button" onClick={resetDailyRevenueForm}>Temizle</button>
+            </div>
+          </form>
+
+          <section className="product-admin-list daily-revenue-list">
+            <div className="daily-revenue-list-head">
+              <div>
+                <h2>Son 10 Gün</h2>
+                <p>Kayıtlı gün sonu ciro kapanışları</p>
+              </div>
+              <button onClick={loadDailyRevenues}>Yenile</button>
+            </div>
+
+            {dailyRevenues.length === 0 && <p className="empty">Henüz gün sonu kaydı yok.</p>}
+
+            <div className="daily-revenue-table">
+              {dailyRevenues.length > 0 && (
+                <div className="daily-revenue-row daily-revenue-header">
+                  <span>Tarih</span>
+                  <span>Nakit</span>
+                  <span>Kart</span>
+                  <span>Diğer</span>
+                  <span>Toplam</span>
+                  <span>Not</span>
+                </div>
+              )}
+
+              {dailyRevenues.map(record => (
+                <div className="daily-revenue-row" key={record.id}>
+                  <span>{parseDateOnly(record.revenue_date).toLocaleDateString("tr-TR")}</span>
+                  <span>{formatPrice(record.cash_amount)}</span>
+                  <span>{formatPrice(record.card_amount)}</span>
+                  <span>{formatPrice(record.other_amount)}</span>
+                  <strong>{formatPrice(record.total_amount)}</strong>
+                  <em>{record.note || "-"}</em>
+                </div>
+              ))}
+            </div>
           </section>
         </section>
       </div>

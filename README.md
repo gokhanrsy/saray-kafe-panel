@@ -47,3 +47,7 @@ Opsiyonel webhook secret kullanacaksanız:
 ```text
 https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://saray-kafe-panel.vercel.app/api/telegram-webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 ```
+
+## Gün sonu ciro kurulumu
+
+`supabase/daily_revenues.sql` dosyasını Supabase SQL Editor'da çalıştırın. Paneldeki `Gün Sonu` ekranı aynı tarih için ikinci kayıt oluşturmaz; mevcut kapanışı günceller.
