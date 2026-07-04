@@ -7,7 +7,7 @@ import "./style.css";
 const TABLES = [
   "Dış Cam", "Masa 1", "Masa 2", "Masa 3",
   "Orta Masa", "Masa 4", "Balkon", "Bahçe 1",
-  "Bahçe 2", "Bahçe 3", "Dış Masa", "İç Masa", "Paket", "Gel Al"
+  "Bahçe 2", "Bahçe 3", "Dış Masa", "İç Masa", "Gel Al"
 ];
 
 const normalizeTableName = value => value?.trim().toLowerCase();
