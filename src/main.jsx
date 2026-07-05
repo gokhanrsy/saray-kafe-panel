@@ -5,10 +5,9 @@ import { supabase } from "./supabaseClient";
 import "./style.css";
 
 const TABLES = [
-  "Masa 1", "Masa 2", "Masa 3", "Masa 4",
-  "Masa 5", "Masa 6", "Masa 7", "Masa 8",
-  "Masa 9", "Masa 10", "Masa 11", "Masa 12",
-  "Masa 13", "Paket", "Gel Al"
+  "Dış Cam", "Masa 1", "Masa 2", "Masa 3",
+  "Orta Masa", "Masa 4", "Balkon", "Bahçe 1",
+  "Bahçe 2", "Bahçe 3", "Dış Masa", "İç Masa", "Gel Al"
 ];
 
 const normalizeTableName = value => value?.trim().toLowerCase();
