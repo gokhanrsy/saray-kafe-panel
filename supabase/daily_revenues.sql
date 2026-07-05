@@ -10,16 +10,56 @@ create table if not exists public.daily_revenues (
   updated_at timestamptz not null default now()
 );
 
+alter table public.daily_revenues
+  add column if not exists revenue_date date;
+
+alter table public.daily_revenues
+  add column if not exists cash_amount numeric(12,2) not null default 0 check (cash_amount >= 0);
+
+alter table public.daily_revenues
+  add column if not exists card_amount numeric(12,2) not null default 0 check (card_amount >= 0);
+
+alter table public.daily_revenues
+  add column if not exists other_amount numeric(12,2) not null default 0 check (other_amount >= 0);
+
+alter table public.daily_revenues
+  add column if not exists total_amount numeric(12,2) not null default 0 check (total_amount >= 0);
+
+alter table public.daily_revenues
+  add column if not exists note text;
+
+alter table public.daily_revenues
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.daily_revenues
+  add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'daily_revenues_revenue_date_key'
+      and conrelid = 'public.daily_revenues'::regclass
+  ) then
+    alter table public.daily_revenues
+      add constraint daily_revenues_revenue_date_key unique (revenue_date);
+  end if;
+end $$;
+
 create index if not exists daily_revenues_date_idx
   on public.daily_revenues (revenue_date desc);
 
 alter table public.daily_revenues enable row level security;
 
+drop policy if exists "panel users can read daily revenues" on public.daily_revenues;
 create policy "panel users can read daily revenues"
   on public.daily_revenues for select to anon, authenticated using (true);
 
+drop policy if exists "panel users can insert daily revenues" on public.daily_revenues;
 create policy "panel users can insert daily revenues"
   on public.daily_revenues for insert to anon, authenticated with check (true);
 
+drop policy if exists "panel users can update daily revenues" on public.daily_revenues;
 create policy "panel users can update daily revenues"
   on public.daily_revenues for update to anon, authenticated using (true) with check (true);

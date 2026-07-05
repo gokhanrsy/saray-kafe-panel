@@ -800,9 +800,9 @@ async function clearOrder(orderId) {
   async function saveDailyRevenue(event) {
   event.preventDefault();
 
-  const cashAmount = Number(dailyRevenueForm.cash_amount || 0);
-  const cardAmount = Number(dailyRevenueForm.card_amount || 0);
-  const otherAmount = Number(dailyRevenueForm.other_amount || 0);
+  const cashAmount = parseDecimalInput(dailyRevenueForm.cash_amount);
+  const cardAmount = parseDecimalInput(dailyRevenueForm.card_amount);
+  const otherAmount = parseDecimalInput(dailyRevenueForm.other_amount);
 
   if (!dailyRevenueForm.revenue_date) {
     setDailyRevenueStatus("Tarih seçmek zorunlu.");
@@ -827,28 +827,19 @@ async function clearOrder(orderId) {
     updated_at: new Date().toISOString()
   };
 
-  const { data: existingRecord, error: readError } = await supabase
+  const { data: existingRecord } = await supabase
     .from("daily_revenues")
     .select("id")
     .eq("revenue_date", dailyRevenueForm.revenue_date)
     .maybeSingle();
 
-  if (readError) {
-    console.error("Daily revenue lookup failed", readError);
-    setDailyRevenueStatus("Mevcut gün sonu kaydı kontrol edilemedi.");
-    setDailyRevenueSaving(false);
-    return;
-  }
-
-  const query = existingRecord?.id
-    ? supabase.from("daily_revenues").update(payload).eq("id", existingRecord.id)
-    : supabase.from("daily_revenues").insert(payload);
-
-  const { error } = await query;
+  const { error } = await supabase
+    .from("daily_revenues")
+    .upsert(payload, { onConflict: "revenue_date" });
 
   if (error) {
     console.error("Daily revenue could not be saved", error);
-    setDailyRevenueStatus("Gün sonu kapanışı kaydedilemedi.");
+    setDailyRevenueStatus(`Gün sonu kapanışı kaydedilemedi: ${error.message || "Supabase tablo/policy ayarlarını kontrol edin."}`);
     setDailyRevenueSaving(false);
     return;
   }
