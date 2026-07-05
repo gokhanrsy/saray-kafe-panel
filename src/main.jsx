@@ -393,9 +393,9 @@ async function clearOrder(orderId) {
 
   const splitSelectedTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
-      const selectedQuantity = Number(splitSelections[item.name] || 0);
+      const selectedQuantity = getSplitSelectionValue(item);
       if (isWeightedCartItem(item)) {
-        return sum + Math.min(selectedQuantity, Number(item.price || 0));
+        return sum + Math.min(selectedQuantity, Number(item.price || 0) * Number(item.quantity || 1));
       }
       return sum + item.price * selectedQuantity;
     }, 0);
@@ -1381,13 +1381,24 @@ async function clearOrder(orderId) {
 }
 
   function adjustSplitItemQuantity(item, change) {
-  const currentQuantity = Number(splitSelections[item.name] || 0);
+  const currentQuantity = getSplitSelectionValue(item);
   setSplitItemQuantity(item, currentQuantity + change);
+}
+
+  function hasSplitSelection(item) {
+  return Object.prototype.hasOwnProperty.call(splitSelections, item.name);
+}
+
+  function getSplitSelectionValue(item) {
+  if (hasSplitSelection(item)) return Number(splitSelections[item.name] || 0);
+  if (isWeightedCartItem(item)) return Number(item.price || 0) * Number(item.quantity || 1);
+  return Number(item.quantity || 0);
 }
 
   function setSplitWeightedAmount(item, amountValue) {
   const amount = parseDecimalInput(amountValue);
-  const safeAmount = Math.max(0, Math.min(amount, Number(item.price || 0)));
+  const totalAmount = Number(item.price || 0) * Number(item.quantity || 1);
+  const safeAmount = Math.max(0, Math.min(amount, totalAmount));
 
   setSplitSelections(prev => ({
     ...prev,
@@ -1399,7 +1410,8 @@ async function clearOrder(orderId) {
   const totalGrams = Number(item.grams || 0) * Number(item.quantity || 1);
   const grams = parseGramInput(gramsValue);
   const safeGrams = Math.max(0, Math.min(grams, totalGrams));
-  const amount = totalGrams > 0 ? (safeGrams / totalGrams) * Number(item.price || 0) : 0;
+  const totalAmount = Number(item.price || 0) * Number(item.quantity || 1);
+  const amount = totalGrams > 0 ? (safeGrams / totalGrams) * totalAmount : 0;
 
   setSplitSelections(prev => ({
     ...prev,
@@ -1408,8 +1420,8 @@ async function clearOrder(orderId) {
 }
 
   function getSplitWeightedGramsValue(item) {
-  const selectedAmount = Number(splitSelections[item.name] || 0);
-  const totalAmount = Number(item.price || 0);
+  const selectedAmount = getSplitSelectionValue(item);
+  const totalAmount = Number(item.price || 0) * Number(item.quantity || 1);
   const totalGrams = Number(item.grams || 0) * Number(item.quantity || 1);
 
   if (selectedAmount <= 0 || totalAmount <= 0 || totalGrams <= 0) return "";
@@ -1422,7 +1434,8 @@ async function clearOrder(orderId) {
     return;
   }
 
-  const selectedItems = Object.entries(splitSelections)
+  const selectedItems = cartItems
+    .map(item => [item.name, getSplitSelectionValue(item)])
     .filter(([, quantity]) => Number(quantity || 0) > 0);
 
   if (selectedItems.length === 0) {
@@ -1462,7 +1475,7 @@ async function clearOrder(orderId) {
 
     if (isWeightedCartItem(item)) {
       const currentLineTotal = Number(latestItem.total_price || latestItem.unit_price || item.price || 0);
-      const paidAmount = Math.min(Number(splitSelections[item.name] || 0), currentLineTotal);
+      const paidAmount = Math.min(getSplitSelectionValue(item), currentLineTotal);
       const remainingLineTotal = Math.max(0, currentLineTotal - paidAmount);
 
       if (paidAmount <= 0) continue;
@@ -1506,7 +1519,7 @@ async function clearOrder(orderId) {
     }
 
     const paidQuantity = Math.min(
-      Number(splitSelections[item.name] || 0),
+      getSplitSelectionValue(item),
       Number(latestItem.quantity || 0)
     );
     const remainingQuantity = Number(latestItem.quantity || 0) - paidQuantity;
@@ -2971,7 +2984,7 @@ async function clearOrder(orderId) {
                                 <input
                                   type="text"
                                   inputMode="decimal"
-                                  value={splitSelections[item.name] || ""}
+                                  value={formatSmartNumber(getSplitSelectionValue(item))}
                                   onChange={event => setSplitWeightedAmount(item, event.target.value)}
                                   placeholder="0"
                                 />
@@ -2992,15 +3005,15 @@ async function clearOrder(orderId) {
                               <button
                                 type="button"
                                 onClick={() => adjustSplitItemQuantity(item, -1)}
-                                disabled={Number(splitSelections[item.name] || 0) <= 0}
+                                disabled={getSplitSelectionValue(item) <= 0}
                               >
                                 -
                               </button>
-                              <strong>{Number(splitSelections[item.name] || 0)}</strong>
+                              <strong>{getSplitSelectionValue(item)}</strong>
                               <button
                                 type="button"
                                 onClick={() => adjustSplitItemQuantity(item, 1)}
-                                disabled={Number(splitSelections[item.name] || 0) >= Number(item.quantity || 0)}
+                                disabled={getSplitSelectionValue(item) >= Number(item.quantity || 0)}
                               >
                                 +
                               </button>

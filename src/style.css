@@ -5967,6 +5967,63 @@ body,
   }
 }
 
+/* Faster split controls */
+.split-line{
+  grid-template-columns:minmax(0,1fr) minmax(156px,220px);
+}
+
+.split-stepper{
+  grid-template-columns:38px 44px 38px;
+  justify-content:end;
+  gap:6px;
+}
+
+.split-stepper button,
+.split-stepper strong{
+  min-height:38px;
+  border-radius:11px;
+}
+
+.split-stepper button{
+  background:rgba(255,255,255,.075);
+}
+
+.split-stepper strong{
+  color:#15100a;
+  background:#ffd36b;
+  font-size:16px;
+}
+
+.split-weighted-inputs{
+  padding:7px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  background:rgba(255,255,255,.04);
+}
+
+.split-weighted-inputs label{
+  display:grid;
+  gap:4px;
+}
+
+.split-weighted-inputs input{
+  min-height:36px;
+  margin-top:0;
+  border-radius:10px;
+  font-size:14px;
+  font-weight:900;
+}
+
+@media(max-width:719px){
+  .split-stepper{
+    justify-content:start;
+  }
+
+  .split-weighted-inputs{
+    width:100%;
+  }
+}
+
 /* Reliable mobile cart sheet controls */
 @media(max-width:719px){
   .mobile-cart-backdrop{
