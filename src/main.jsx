@@ -164,6 +164,7 @@ function App() {
   const [dailyRevenueStatus, setDailyRevenueStatus] = useState("");
   const [dailyRevenueSaving, setDailyRevenueSaving] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showOnlyOpenTables, setShowOnlyOpenTables] = useState(false);
 
   function handleLogin(event) {
   event.preventDefault();
@@ -436,6 +437,11 @@ async function clearOrder(orderId) {
       !pendingOrdersByTable[normalizeTableName(tableName)]
     );
   }, [pendingOrdersByTable, selectedTable]);
+
+  const visibleTables = useMemo(() => {
+    if (!showOnlyOpenTables) return TABLES;
+    return TABLES.filter(tableName => pendingOrdersByTable[normalizeTableName(tableName)]);
+  }, [pendingOrdersByTable, showOnlyOpenTables]);
 
   const productCategoriesByName = useMemo(() => {
     return products.reduce((categoriesByName, product) => {
@@ -1985,6 +1991,7 @@ async function clearOrder(orderId) {
   setReport(null);
   setMobileCartOpen(false);
   setMobileActionsOpen(false);
+  setShowOnlyOpenTables(false);
   setScreen("tables");
 }
 
@@ -2111,10 +2118,13 @@ async function clearOrder(orderId) {
               <strong>{formatPrice(todayRevenueTotal)}</strong>
               <small>Gün sonu kaydı</small>
             </button>
-            <button className="summary-card orders" onClick={() => goToScreen("tables")}>
+            <button
+              className={`summary-card orders ${showOnlyOpenTables ? "active-filter" : ""}`}
+              onClick={() => setShowOnlyOpenTables(prev => !prev)}
+            >
               <span>Açık Adisyon</span>
               <strong>{openOrders.length}</strong>
-              <small>Aktif masa / sipariş</small>
+              <small>{showOnlyOpenTables ? "Tüm masaları göster" : "Açık masaları göster"}</small>
             </button>
             <button className="summary-card stock" onClick={() => goToScreen("critical-stock")}>
               <span>Kritik Stok</span>
@@ -2131,13 +2141,22 @@ async function clearOrder(orderId) {
           <section className="modern-panel">
             <div className="section-title">
               <div>
-                <h2>Masa Durumu</h2>
-                <p>Canlı adisyon durumları</p>
+                <h2>{showOnlyOpenTables ? "Açık Masalar" : "Masa Durumu"}</h2>
+                <p>{showOnlyOpenTables ? "Sadece açık adisyonu olan masalar" : "Canlı adisyon durumları"}</p>
               </div>
+              {showOnlyOpenTables && (
+                <button type="button" onClick={() => setShowOnlyOpenTables(false)}>
+                  Tüm Masalar
+                </button>
+              )}
             </div>
 
             <section className="table-grid">
-              {TABLES.map(t => {
+              {visibleTables.length === 0 && (
+                <p className="empty open-tables-empty">Açık adisyon yok.</p>
+              )}
+
+              {visibleTables.map(t => {
                 const pendingOrder = pendingOrdersByTable[normalizeTableName(t)];
                 const isOpen = Boolean(pendingOrder);
                 const emptyClass = t.includes("Paket")
