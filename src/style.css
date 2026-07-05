@@ -6397,6 +6397,11 @@ button{
   text-align:left;
 }
 
+.app-shell .table-card.open{
+  position:relative;
+  padding-bottom:42px;
+}
+
 .app-shell .table-card:active,
 .order-layout .product-card:active,
 .mobile-cart-bar button:active{
@@ -6411,12 +6416,22 @@ button{
   display:grid;
   gap:3px;
   min-height:0;
+  padding-right:82px;
 }
 
 .table-order-preview span{
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+}
+
+.app-shell .table-total{
+  position:absolute;
+  right:14px;
+  bottom:12px;
+  padding-top:0;
+  text-align:right;
+  white-space:nowrap;
 }
 
 .order-layout{
@@ -6623,6 +6638,20 @@ button{
     border-radius:20px;
   }
 
+  .app-shell .table-card.open{
+    padding-bottom:40px;
+  }
+
+  .table-order-preview{
+    padding-right:78px;
+  }
+
+  .app-shell .table-total{
+    right:12px;
+    bottom:11px;
+    font-size:18px;
+  }
+
   .order-layout{
     max-width:100%;
     padding:12px;
@@ -6799,6 +6828,10 @@ button{
     border-radius:17px;
   }
 
+  .app-shell .table-card.open{
+    padding-bottom:34px;
+  }
+
   .table-icon{
     width:32px;
     height:32px;
@@ -6832,6 +6865,11 @@ button{
 
   .table-total{
     font-size:15px;
+  }
+
+  .app-shell .table-total{
+    right:10px;
+    bottom:9px;
   }
 
   .order-layout{
