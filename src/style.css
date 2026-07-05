@@ -3578,6 +3578,38 @@ button{
 .expiry-form textarea:focus{outline:2px solid rgba(240,166,64,.24);border-color:var(--primary)}
 .expiry-list{display:grid;gap:10px}
 
+.expiry-list-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:rgba(255,255,255,.045);
+}
+
+.expiry-list-head h2{
+  margin:0;
+  font-size:20px;
+}
+
+.expiry-list-head p{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.expiry-list-head button{
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:13px;
+  padding:10px 13px;
+  color:#fff;
+  background:rgba(255,255,255,.075);
+  font-weight:850;
+  white-space:nowrap;
+}
+
 .expiry-row{
   padding:15px;
   border:1px solid var(--line);
@@ -3600,6 +3632,11 @@ button{
 .expiry-row-meta em{font-style:normal}
 .expiry-row > p{margin:9px 0;color:#d6dee5;font-size:13px}
 .expiry-row .product-row-actions{margin-top:11px;justify-content:flex-end}
+.expiry-row .product-row-actions .danger{
+  color:#ffd6d6;
+  border-color:rgba(238,72,72,.32);
+  background:rgba(238,72,72,.12);
+}
 .expiry-row.days-7,.expiry-row.approaching{border-left-color:#e4b84f}
 .expiry-row.days-7 .expiry-row-head b,.expiry-row.approaching .expiry-row-head b{background:rgba(228,184,79,.14);color:#ffd778}
 .expiry-row.days-3{border-left-color:#ef9d3b}
@@ -3631,8 +3668,13 @@ button{
   .daily-revenue-row strong::before{content:"Toplam: ";color:var(--muted);font-weight:800}
   .daily-revenue-button{width:100%}
   .expiry-summary{grid-template-columns:1fr}
+  .expiry-list-head{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .expiry-list-head button{width:100%}
   .expiry-row-head{align-items:flex-start}
-  .expiry-row .product-row-actions{display:grid;grid-template-columns:1fr 1fr}
+  .expiry-row .product-row-actions{display:grid;grid-template-columns:1fr 1fr 1fr}
   .expiry-button{width:100%}
 }
 

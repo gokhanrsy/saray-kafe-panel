@@ -153,6 +153,7 @@ function App() {
   const [editingExpiryId, setEditingExpiryId] = useState(null);
   const [expiryStatus, setExpiryStatus] = useState("");
   const [expirySaving, setExpirySaving] = useState(false);
+  const [showInactiveExpiryItems, setShowInactiveExpiryItems] = useState(false);
   const [dailyRevenueForm, setDailyRevenueForm] = useState(() => createDailyRevenueForm(getDateInputValue(new Date())));
   const [dailyRevenues, setDailyRevenues] = useState([]);
   const [dailyRevenueStatus, setDailyRevenueStatus] = useState("");
@@ -477,10 +478,14 @@ async function clearOrder(orderId) {
   }, []);
 
   const sortedExpiryItems = useMemo(() => {
-    return [...expiryItems].sort((a, b) =>
-      a.expiry_date.localeCompare(b.expiry_date) || a.product_name.localeCompare(b.product_name, "tr")
-    );
-  }, [expiryItems]);
+    return expiryItems
+      .filter(item => showInactiveExpiryItems || item.active !== false)
+      .sort((a, b) =>
+        Number(a.active === false) - Number(b.active === false) ||
+        a.expiry_date.localeCompare(b.expiry_date) ||
+        a.product_name.localeCompare(b.product_name, "tr")
+      );
+  }, [expiryItems, showInactiveExpiryItems]);
 
   const dailyRevenueTotal = useMemo(() => {
     return ["cash_amount", "card_amount", "other_amount"].reduce(
@@ -962,6 +967,31 @@ async function clearOrder(orderId) {
 
   await loadExpiryItems();
   setExpiryStatus("Kayıt durumu güncellendi.");
+}
+
+  async function deleteExpiryItem(item) {
+  const confirmed = window.confirm(`${item.product_name} SKT kaydı tamamen silinsin mi?`);
+  if (!confirmed) return;
+
+  setExpiryStatus("Siliniyor...");
+  const { error } = await supabase
+    .from("expiry_items")
+    .delete()
+    .eq("id", item.id);
+
+  if (error) {
+    console.error("Expiry item could not be deleted", error);
+    setExpiryStatus("SKT kaydı silinemedi.");
+    return;
+  }
+
+  if (editingExpiryId === item.id) {
+    setEditingExpiryId(null);
+    setExpiryForm(emptyExpiryForm);
+  }
+
+  await loadExpiryItems();
+  setExpiryStatus("SKT kaydı silindi.");
 }
 
   function resetProductForm() {
@@ -2548,6 +2578,20 @@ async function clearOrder(orderId) {
           </form>
 
           <section className="expiry-list">
+            <div className="expiry-list-head">
+              <div>
+                <h2>SKT Listesi</h2>
+                <p>
+                  {showInactiveExpiryItems
+                    ? "Aktif ve pasif kayıtlar gösteriliyor."
+                    : "Sadece aktif kayıtlar gösteriliyor."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowInactiveExpiryItems(prev => !prev)}>
+                {showInactiveExpiryItems ? "Pasifleri Gizle" : "Pasifleri Göster"}
+              </button>
+            </div>
+
             {sortedExpiryItems.length === 0 && <p className="empty">Henüz SKT kaydı yok.</p>}
             {sortedExpiryItems.map(item => {
               const daysLeft = getExpiryDaysLeft(item.expiry_date);
@@ -2569,6 +2613,9 @@ async function clearOrder(orderId) {
                     <button onClick={() => editExpiryItem(item)}>Düzenle</button>
                     <button onClick={() => toggleExpiryActive(item)}>
                       {item.active === false ? "Aktif Yap" : "Pasif Yap"}
+                    </button>
+                    <button className="danger" onClick={() => deleteExpiryItem(item)}>
+                      Sil
                     </button>
                   </div>
                 </article>
