@@ -387,6 +387,12 @@ async function clearOrder(orderId) {
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
+  const cartUnitCount = useMemo(() => {
+    return cartItems.reduce((count, item) => {
+      return count + (isWeightedCartItem(item) ? 1 : Number(item.quantity || 0));
+    }, 0);
+  }, [cartItems]);
+
   const total = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
@@ -2784,7 +2790,7 @@ async function clearOrder(orderId) {
         <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
         <div>
           <h1>{selectedTable}</h1>
-          <p>{cartItems.length} ürün</p>
+          <p>{cartUnitCount} ürün</p>
         </div>
         <strong>{formatPrice(total)}</strong>
       </header>
@@ -2846,7 +2852,7 @@ async function clearOrder(orderId) {
           <div className="cart-head">
             <div>
               <h2>Adisyon</h2>
-              <span>{selectedTable} · {cartItems.length} ürün</span>
+              <span>{selectedTable} · {cartUnitCount} ürün</span>
             </div>
             <button className="cart-close" onClick={() => setMobileCartOpen(false)} aria-label="Adisyonu kapat">
               <X size={22} />
@@ -3047,7 +3053,7 @@ async function clearOrder(orderId) {
         <div>
           <span>Toplam</span>
           <strong>{formatPrice(total)}</strong>
-          <small>{cartItems.length} ürün</small>
+          <small>{cartUnitCount} ürün</small>
         </div>
         <button className="mobile-pay-button" onClick={() => saveOrder(true)}>
           Ödeme Al
