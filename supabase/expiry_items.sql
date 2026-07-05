@@ -22,11 +22,18 @@ create index if not exists expiry_items_active_date_idx
 
 alter table public.expiry_items enable row level security;
 
+drop policy if exists "panel users can read expiry items" on public.expiry_items;
 create policy "panel users can read expiry items"
   on public.expiry_items for select to anon, authenticated using (true);
 
+drop policy if exists "panel users can insert expiry items" on public.expiry_items;
 create policy "panel users can insert expiry items"
   on public.expiry_items for insert to anon, authenticated with check (true);
 
+drop policy if exists "panel users can update expiry items" on public.expiry_items;
 create policy "panel users can update expiry items"
   on public.expiry_items for update to anon, authenticated using (true) with check (true);
+
+drop policy if exists "panel users can delete expiry items" on public.expiry_items;
+create policy "panel users can delete expiry items"
+  on public.expiry_items for delete to anon, authenticated using (true);

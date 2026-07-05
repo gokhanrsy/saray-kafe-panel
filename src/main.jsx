@@ -89,6 +89,11 @@ const getExpiryTone = days => {
   return "safe";
 };
 
+const isExpiryItemInactive = item =>
+  item?.active === false || item?.active === "false" || item?.active === 0;
+
+const isExpiryItemActive = item => !isExpiryItemInactive(item);
+
 function App() {
   const panelPassword = import.meta.env.VITE_PANEL_PASSWORD || "1234";
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -446,7 +451,7 @@ async function clearOrder(orderId) {
   }, [products]);
 
   const expirySummary = useMemo(() => {
-    const activeItems = expiryItems.filter(item => item.active !== false);
+    const activeItems = expiryItems.filter(isExpiryItemActive);
     return {
       approaching: activeItems.filter(item => {
         const days = getExpiryDaysLeft(item.expiry_date);
@@ -458,7 +463,7 @@ async function clearOrder(orderId) {
 
   const todayExpiryCount = useMemo(() => {
     return expiryItems.filter(item =>
-      item.active !== false && getExpiryDaysLeft(item.expiry_date) === 0
+      isExpiryItemActive(item) && getExpiryDaysLeft(item.expiry_date) === 0
     ).length;
   }, [expiryItems]);
 
@@ -479,9 +484,9 @@ async function clearOrder(orderId) {
 
   const sortedExpiryItems = useMemo(() => {
     return expiryItems
-      .filter(item => showInactiveExpiryItems || item.active !== false)
+      .filter(item => showInactiveExpiryItems || isExpiryItemActive(item))
       .sort((a, b) =>
-        Number(a.active === false) - Number(b.active === false) ||
+        Number(isExpiryItemInactive(a)) - Number(isExpiryItemInactive(b)) ||
         a.expiry_date.localeCompare(b.expiry_date) ||
         a.product_name.localeCompare(b.product_name, "tr")
       );
@@ -954,9 +959,10 @@ async function clearOrder(orderId) {
 
   async function toggleExpiryActive(item) {
   setExpiryStatus("Güncelleniyor...");
+  const nextActive = isExpiryItemInactive(item);
   const { error } = await supabase
     .from("expiry_items")
-    .update({ active: item.active === false })
+    .update({ active: nextActive })
     .eq("id", item.id);
 
   if (error) {
@@ -965,7 +971,11 @@ async function clearOrder(orderId) {
     return;
   }
 
-  await loadExpiryItems();
+  setExpiryItems(prevItems =>
+    prevItems.map(prevItem =>
+      prevItem.id === item.id ? { ...prevItem, active: nextActive } : prevItem
+    )
+  );
   setExpiryStatus("Kayıt durumu güncellendi.");
 }
 
@@ -2596,7 +2606,7 @@ async function clearOrder(orderId) {
             {sortedExpiryItems.map(item => {
               const daysLeft = getExpiryDaysLeft(item.expiry_date);
               return (
-                <article className={`expiry-row ${getExpiryTone(daysLeft)} ${item.active === false ? "inactive" : ""}`} key={item.id}>
+                <article className={`expiry-row ${getExpiryTone(daysLeft)} ${isExpiryItemInactive(item) ? "inactive" : ""}`} key={item.id}>
                   <div className="expiry-row-head">
                     <div>
                       <strong>{item.product_name}</strong>
@@ -2606,13 +2616,13 @@ async function clearOrder(orderId) {
                   </div>
                   <div className="expiry-row-meta">
                     <span>SKT: {parseDateOnly(item.expiry_date).toLocaleDateString("tr-TR")}</span>
-                    <em>{item.active === false ? "Pasif" : "Aktif"}</em>
+                    <em>{isExpiryItemInactive(item) ? "Pasif" : "Aktif"}</em>
                   </div>
                   {item.note && <p>{item.note}</p>}
                   <div className="product-row-actions">
                     <button onClick={() => editExpiryItem(item)}>Düzenle</button>
                     <button onClick={() => toggleExpiryActive(item)}>
-                      {item.active === false ? "Aktif Yap" : "Pasif Yap"}
+                      {isExpiryItemInactive(item) ? "Aktif Yap" : "Pasif Yap"}
                     </button>
                     <button className="danger" onClick={() => deleteExpiryItem(item)}>
                       Sil
