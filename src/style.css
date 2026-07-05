@@ -944,6 +944,38 @@ button{font-family:inherit; cursor:pointer}
   margin-top:4px;
 }
 
+.split-stepper{
+  display:grid;
+  grid-template-columns:42px minmax(42px,1fr) 42px;
+  align-items:center;
+  gap:7px;
+}
+
+.split-stepper button{
+  min-height:42px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;
+  color:var(--text);
+  background:rgba(255,255,255,.06);
+  font-size:20px;
+  font-weight:950;
+}
+
+.split-stepper button:disabled{
+  opacity:.38;
+  cursor:not-allowed;
+}
+
+.split-stepper strong{
+  min-height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  color:#ffd36b;
+  background:rgba(243,154,34,.1);
+  font-size:18px;
+}
+
 .split-total{
   display:flex;
   justify-content:space-between;

@@ -1380,6 +1380,11 @@ async function clearOrder(orderId) {
   }));
 }
 
+  function adjustSplitItemQuantity(item, change) {
+  const currentQuantity = Number(splitSelections[item.name] || 0);
+  setSplitItemQuantity(item, currentQuantity + change);
+}
+
   function setSplitWeightedAmount(item, amountValue) {
   const amount = parseDecimalInput(amountValue);
   const safeAmount = Math.max(0, Math.min(amount, Number(item.price || 0)));
@@ -2983,13 +2988,23 @@ async function clearOrder(orderId) {
                               </label>
                             </div>
                           ) : (
-                            <input
-                              type="number"
-                              min="0"
-                              max={item.quantity}
-                              value={splitSelections[item.name] || 0}
-                              onChange={event => setSplitItemQuantity(item, event.target.value)}
-                            />
+                            <div className="split-stepper">
+                              <button
+                                type="button"
+                                onClick={() => adjustSplitItemQuantity(item, -1)}
+                                disabled={Number(splitSelections[item.name] || 0) <= 0}
+                              >
+                                -
+                              </button>
+                              <strong>{Number(splitSelections[item.name] || 0)}</strong>
+                              <button
+                                type="button"
+                                onClick={() => adjustSplitItemQuantity(item, 1)}
+                                disabled={Number(splitSelections[item.name] || 0) >= Number(item.quantity || 0)}
+                              >
+                                +
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))}
