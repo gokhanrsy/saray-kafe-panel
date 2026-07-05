@@ -455,7 +455,7 @@ async function clearOrder(orderId) {
   const todayRevenueTotal = useMemo(() => {
     const todayValue = getDateInputValue(new Date());
     const todayRecord = dailyRevenues.find(record => record.revenue_date === todayValue);
-    return Number(todayRecord?.total_amount || 0);
+    return todayRecord ? getDailyRevenueRecordTotal(todayRecord) : 0;
   }, [dailyRevenues]);
 
   const todayHeaderLabel = useMemo(() => {
@@ -796,6 +796,20 @@ async function clearOrder(orderId) {
   setDailyRevenueStatus("");
 }
 
+  function updateDailyRevenueForm(field, value) {
+  setDailyRevenueForm(prev => ({ ...prev, [field]: value }));
+  setDailyRevenueStatus("");
+}
+
+  function getDailyRevenueRecordTotal(record) {
+  const storedTotal = Number(record?.total_amount);
+  if (Number.isFinite(storedTotal) && storedTotal > 0) return storedTotal;
+
+  return Number(record?.cash_amount || 0) +
+    Number(record?.card_amount || 0) +
+    Number(record?.other_amount || 0);
+}
+
   async function saveDailyRevenue(event) {
   event.preventDefault();
 
@@ -821,7 +835,6 @@ async function clearOrder(orderId) {
     cash_amount: cashAmount,
     card_amount: cardAmount,
     other_amount: otherAmount,
-    total_amount: cashAmount + cardAmount + otherAmount,
     note: dailyRevenueForm.note.trim() || null,
     updated_at: new Date().toISOString()
   };
@@ -2229,7 +2242,7 @@ async function clearOrder(orderId) {
               <input
                 type="date"
                 value={dailyRevenueForm.revenue_date}
-                onChange={event => setDailyRevenueForm(prev => ({ ...prev, revenue_date: event.target.value }))}
+                onChange={event => updateDailyRevenueForm("revenue_date", event.target.value)}
               />
             </label>
 
@@ -2241,7 +2254,7 @@ async function clearOrder(orderId) {
                   min="0"
                   step="0.01"
                   value={dailyRevenueForm.cash_amount}
-                  onChange={event => setDailyRevenueForm(prev => ({ ...prev, cash_amount: event.target.value }))}
+                  onChange={event => updateDailyRevenueForm("cash_amount", event.target.value)}
                   placeholder="0"
                 />
               </label>
@@ -2253,7 +2266,7 @@ async function clearOrder(orderId) {
                   min="0"
                   step="0.01"
                   value={dailyRevenueForm.card_amount}
-                  onChange={event => setDailyRevenueForm(prev => ({ ...prev, card_amount: event.target.value }))}
+                  onChange={event => updateDailyRevenueForm("card_amount", event.target.value)}
                   placeholder="0"
                 />
               </label>
@@ -2266,7 +2279,7 @@ async function clearOrder(orderId) {
                 min="0"
                 step="0.01"
                 value={dailyRevenueForm.other_amount}
-                onChange={event => setDailyRevenueForm(prev => ({ ...prev, other_amount: event.target.value }))}
+                onChange={event => updateDailyRevenueForm("other_amount", event.target.value)}
                 placeholder="0"
               />
             </label>
@@ -2275,7 +2288,7 @@ async function clearOrder(orderId) {
               Not
               <textarea
                 value={dailyRevenueForm.note}
-                onChange={event => setDailyRevenueForm(prev => ({ ...prev, note: event.target.value }))}
+                onChange={event => updateDailyRevenueForm("note", event.target.value)}
                 placeholder="İsteğe bağlı kapanış notu"
               />
             </label>
@@ -2324,7 +2337,7 @@ async function clearOrder(orderId) {
                   <span>{formatPrice(record.cash_amount)}</span>
                   <span>{formatPrice(record.card_amount)}</span>
                   <span>{formatPrice(record.other_amount)}</span>
-                  <strong>{formatPrice(record.total_amount)}</strong>
+                  <strong>{formatPrice(getDailyRevenueRecordTotal(record))}</strong>
                   <em>{record.note || "-"}</em>
                 </div>
               ))}

@@ -4,7 +4,9 @@ create table if not exists public.daily_revenues (
   cash_amount numeric(12,2) not null default 0 check (cash_amount >= 0),
   card_amount numeric(12,2) not null default 0 check (card_amount >= 0),
   other_amount numeric(12,2) not null default 0 check (other_amount >= 0),
-  total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
+  total_amount numeric(12,2) generated always as (
+    cash_amount + card_amount + other_amount
+  ) stored,
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -23,7 +25,9 @@ alter table public.daily_revenues
   add column if not exists other_amount numeric(12,2) not null default 0 check (other_amount >= 0);
 
 alter table public.daily_revenues
-  add column if not exists total_amount numeric(12,2) not null default 0 check (total_amount >= 0);
+  add column if not exists total_amount numeric(12,2) generated always as (
+    cash_amount + card_amount + other_amount
+  ) stored;
 
 alter table public.daily_revenues
   add column if not exists note text;
@@ -49,6 +53,39 @@ end $$;
 
 create index if not exists daily_revenues_date_idx
   on public.daily_revenues (revenue_date desc);
+
+create or replace function public.set_daily_revenue_total_amount()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.total_amount :=
+    coalesce(new.cash_amount, 0) +
+    coalesce(new.card_amount, 0) +
+    coalesce(new.other_amount, 0);
+  return new;
+end;
+$$;
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_attribute
+    where attrelid = 'public.daily_revenues'::regclass
+      and attname = 'total_amount'
+      and attgenerated = ''
+  ) then
+    drop trigger if exists set_daily_revenue_total_amount_trigger on public.daily_revenues;
+    create trigger set_daily_revenue_total_amount_trigger
+      before insert or update of cash_amount, card_amount, other_amount
+      on public.daily_revenues
+      for each row
+      execute function public.set_daily_revenue_total_amount();
+  else
+    drop trigger if exists set_daily_revenue_total_amount_trigger on public.daily_revenues;
+  end if;
+end $$;
 
 alter table public.daily_revenues enable row level security;
 
