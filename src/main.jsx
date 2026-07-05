@@ -394,6 +394,9 @@ async function clearOrder(orderId) {
   const splitSelectedTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
       const selectedQuantity = Number(splitSelections[item.name] || 0);
+      if (isWeightedCartItem(item)) {
+        return sum + Math.min(selectedQuantity, Number(item.price || 0));
+      }
       return sum + item.price * selectedQuantity;
     }, 0);
   }, [cartItems, splitSelections]);
@@ -1364,12 +1367,48 @@ async function clearOrder(orderId) {
 }
 
   function setSplitItemQuantity(item, quantity) {
+  if (isWeightedCartItem(item)) {
+    setSplitWeightedAmount(item, quantity);
+    return;
+  }
+
   const safeQuantity = Math.max(0, Math.min(Number(quantity || 0), item.quantity));
 
   setSplitSelections(prev => ({
     ...prev,
     [item.name]: safeQuantity
   }));
+}
+
+  function setSplitWeightedAmount(item, amountValue) {
+  const amount = parseDecimalInput(amountValue);
+  const safeAmount = Math.max(0, Math.min(amount, Number(item.price || 0)));
+
+  setSplitSelections(prev => ({
+    ...prev,
+    [item.name]: safeAmount
+  }));
+}
+
+  function setSplitWeightedGrams(item, gramsValue) {
+  const totalGrams = Number(item.grams || 0) * Number(item.quantity || 1);
+  const grams = parseGramInput(gramsValue);
+  const safeGrams = Math.max(0, Math.min(grams, totalGrams));
+  const amount = totalGrams > 0 ? (safeGrams / totalGrams) * Number(item.price || 0) : 0;
+
+  setSplitSelections(prev => ({
+    ...prev,
+    [item.name]: Number(amount.toFixed(2))
+  }));
+}
+
+  function getSplitWeightedGramsValue(item) {
+  const selectedAmount = Number(splitSelections[item.name] || 0);
+  const totalAmount = Number(item.price || 0);
+  const totalGrams = Number(item.grams || 0) * Number(item.quantity || 1);
+
+  if (selectedAmount <= 0 || totalAmount <= 0 || totalGrams <= 0) return "";
+  return formatSmartNumber((selectedAmount / totalAmount) * totalGrams);
 }
 
   async function paySelectedSplitItems() {
@@ -1416,6 +1455,51 @@ async function clearOrder(orderId) {
     const latestItem = latestItemsByName[item.name];
     if (!latestItem) continue;
 
+    if (isWeightedCartItem(item)) {
+      const currentLineTotal = Number(latestItem.total_price || latestItem.unit_price || item.price || 0);
+      const paidAmount = Math.min(Number(splitSelections[item.name] || 0), currentLineTotal);
+      const remainingLineTotal = Math.max(0, currentLineTotal - paidAmount);
+
+      if (paidAmount <= 0) continue;
+
+      console.log("Skipping weighted split stock deduction", {
+        productName: item.name,
+        paidAmount
+      });
+
+      if (remainingLineTotal <= 0.009) {
+        const { error: deleteError } = await supabase
+          .from("order_items")
+          .delete()
+          .eq("order_id", currentOrderId)
+          .eq("product_name", item.name);
+
+        if (deleteError) {
+          console.error(deleteError);
+          setStatus("Ödenen tartılı ürün silinemedi.");
+          return;
+        }
+      } else {
+        const { error: updateItemError } = await supabase
+          .from("order_items")
+          .update({
+            quantity: 1,
+            unit_price: remainingLineTotal,
+            total_price: remainingLineTotal
+          })
+          .eq("order_id", currentOrderId)
+          .eq("product_name", item.name);
+
+        if (updateItemError) {
+          console.error(updateItemError);
+          setStatus("Tartılı ürün güncellenemedi.");
+          return;
+        }
+      }
+
+      continue;
+    }
+
     const paidQuantity = Math.min(
       Number(splitSelections[item.name] || 0),
       Number(latestItem.quantity || 0)
@@ -1426,12 +1510,6 @@ async function clearOrder(orderId) {
 
     if (paidQuantity <= 0) continue;
 
-    if (isWeightedCartItem(item)) {
-      console.log("Skipping weighted split stock deduction", {
-        productName: item.name,
-        paidQuantity
-      });
-    } else {
     const { data: currentProduct, error: stockReadError } = await supabase
       .from("products")
       .select("name,stock")
@@ -1488,7 +1566,6 @@ async function clearOrder(orderId) {
         error: movementError
       });
     }
-    }
 
     if (remainingQuantity <= 0) {
       const { error: deleteError } = await supabase
@@ -1537,15 +1614,24 @@ async function clearOrder(orderId) {
   const remainingTotal = (remainingItems || []).reduce((sum, item) => {
     const unitPrice = Number(item.unit_price || 0);
     const quantity = Number(item.quantity || 0);
+    const baseName = getWeightedBaseName({ name: item.product_name });
+    const baseProduct = products.find(product => product.name === baseName);
+    const isWeighted = baseProduct?.unit_type === "weighted" || / - \d+([.,]\d+)? TL$/.test(item.product_name);
+    const grams = isWeighted && Number(baseProduct?.price || 0) > 0
+      ? Math.round((unitPrice / Number(baseProduct.price || 0)) * 1000)
+      : null;
 
     if (quantity > 0) {
       nextCart[item.product_name] = {
         name: item.product_name,
         price: unitPrice,
         quantity,
+        grams,
         product: {
-          name: item.product_name,
-          price: unitPrice
+          name: isWeighted ? baseName : item.product_name,
+          price: isWeighted ? Number(baseProduct?.price || unitPrice) : unitPrice,
+          unit_type: isWeighted ? "weighted" : baseProduct?.unit_type || "piece",
+          grams
         }
       };
     }
@@ -2867,15 +2953,44 @@ async function clearOrder(orderId) {
                         <div className="split-line" key={item.name}>
                           <div>
                             <strong>{item.name}</strong>
-                            <span>{item.quantity} adet · {formatPrice(item.price)}</span>
+                            <span>
+                              {isWeightedCartItem(item)
+                                ? `${formatGramValue(Number(item.grams || 0) * item.quantity)} · ${formatPrice(item.price * item.quantity)}`
+                                : `${item.quantity} adet · ${formatPrice(item.price)}`}
+                            </span>
                           </div>
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.quantity}
-                            value={splitSelections[item.name] || 0}
-                            onChange={event => setSplitItemQuantity(item, event.target.value)}
-                          />
+                          {isWeightedCartItem(item) ? (
+                            <div className="split-weighted-inputs">
+                              <label>
+                                TL düş
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={splitSelections[item.name] || ""}
+                                  onChange={event => setSplitWeightedAmount(item, event.target.value)}
+                                  placeholder="0"
+                                />
+                              </label>
+                              <label>
+                                Gram düş
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={getSplitWeightedGramsValue(item)}
+                                  onChange={event => setSplitWeightedGrams(item, event.target.value)}
+                                  placeholder="0"
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.quantity}
+                              value={splitSelections[item.name] || 0}
+                              onChange={event => setSplitItemQuantity(item, event.target.value)}
+                            />
+                          )}
                         </div>
                       ))}
 

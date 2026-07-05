@@ -917,7 +917,7 @@ button{font-family:inherit; cursor:pointer}
 
 .split-line{
   display:grid;
-  grid-template-columns:1fr 82px;
+  grid-template-columns:minmax(0,1fr) minmax(82px,220px);
   gap:10px;
   align-items:center;
   padding:10px 0;
@@ -926,6 +926,22 @@ button{font-family:inherit; cursor:pointer}
 
 .split-line strong{
   display:block;
+}
+
+.split-weighted-inputs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.split-weighted-inputs label{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:900;
+}
+
+.split-weighted-inputs input{
+  margin-top:4px;
 }
 
 .split-total{
@@ -5905,6 +5921,17 @@ body,
 
   .product-management .form-grid{
     grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:719px){
+  .split-line{
+    grid-template-columns:1fr;
+    align-items:start;
+  }
+
+  .split-weighted-inputs{
+    grid-template-columns:1fr 1fr;
   }
 }
 
