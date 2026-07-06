@@ -5834,7 +5834,7 @@ body,
 
 .product-management .product-list-toolbar{
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(260px,420px);
+  grid-template-columns:minmax(0,1fr) minmax(320px,520px);
   align-items:center;
   gap:12px;
   margin-bottom:12px;
@@ -5842,6 +5842,13 @@ body,
   border:1px solid rgba(255,255,255,.08);
   border-radius:18px;
   background:rgba(255,255,255,.045);
+}
+
+.product-management .product-list-tools{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
 }
 
 .product-management .product-list-toolbar h2{
@@ -5877,6 +5884,17 @@ body,
   background:rgba(255,255,255,.08);
 }
 
+.product-management .toggle-inactive-products{
+  min-height:46px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  padding:0 13px;
+  color:#fff;
+  background:rgba(255,255,255,.075);
+  font-weight:850;
+  white-space:nowrap;
+}
+
 .product-management .product-empty{
   padding:18px;
   border:1px dashed rgba(255,255,255,.12);
@@ -5895,7 +5913,7 @@ body,
 
 .product-management .product-row{
   display:grid;
-  grid-template-columns:minmax(0,1.5fr) minmax(150px,.75fr) minmax(160px,.8fr) minmax(150px,.8fr) minmax(260px,auto);
+  grid-template-columns:minmax(0,1.5fr) minmax(130px,.65fr) minmax(120px,.65fr) minmax(130px,.7fr) minmax(330px,auto);
   grid-template-areas:
     "name price stock badges actions";
   align-items:center;
@@ -5969,9 +5987,15 @@ body,
 .product-management .product-row-actions{
   grid-area:actions;
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:7px;
   align-items:center;
+}
+
+.product-management .product-row-actions .danger{
+  color:#ffd6d6;
+  border-color:rgba(238,72,72,.32);
+  background:rgba(238,72,72,.12);
 }
 
 .product-management .product-row-actions button{
@@ -6036,6 +6060,10 @@ body,
     grid-template-columns:1fr;
   }
 
+  .product-management .product-list-tools{
+    grid-template-columns:1fr;
+  }
+
   .product-management .product-row{
     grid-template-columns:minmax(0,1fr) minmax(130px,auto);
     grid-template-areas:
@@ -6047,7 +6075,7 @@ body,
   }
 
   .product-management .product-row-actions{
-    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-columns:repeat(4,minmax(0,1fr));
   }
 }
 
@@ -6068,7 +6096,7 @@ body,
   }
 
   .product-management .product-row-actions{
-    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-columns:repeat(2,minmax(0,1fr));
   }
 
   .product-management .product-row-actions button{

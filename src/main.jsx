@@ -172,6 +172,7 @@ function App() {
   const [productStatus, setProductStatus] = useState("");
   const [productSaving, setProductSaving] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [showInactiveProducts, setShowInactiveProducts] = useState(false);
   const [stockSearchTerm, setStockSearchTerm] = useState("");
   const [stockEntryAmounts, setStockEntryAmounts] = useState({});
   const [stockEntryNotes, setStockEntryNotes] = useState({});
@@ -434,13 +435,15 @@ async function clearOrder(orderId) {
   const filteredManagementProducts = useMemo(() => {
     const normalizedSearch = productSearchTerm.trim().toLowerCase();
 
-    return products.filter(product =>
-      !normalizedSearch ||
-      product.name?.toLowerCase().includes(normalizedSearch) ||
-      product.category?.toLowerCase().includes(normalizedSearch) ||
-      product.unit_type?.toLowerCase().includes(normalizedSearch)
-    );
-  }, [products, productSearchTerm]);
+    return products
+      .filter(product => showInactiveProducts || product.active !== false)
+      .filter(product =>
+        !normalizedSearch ||
+        product.name?.toLowerCase().includes(normalizedSearch) ||
+        product.category?.toLowerCase().includes(normalizedSearch) ||
+        product.unit_type?.toLowerCase().includes(normalizedSearch)
+      );
+  }, [products, productSearchTerm, showInactiveProducts]);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
@@ -1154,6 +1157,36 @@ async function clearOrder(orderId) {
 
   await loadProducts();
   setProductStatus(nextActive ? "Ürün aktif edildi." : "Ürün pasif edildi.");
+}
+
+  async function deleteProduct(product) {
+  const confirmed = window.confirm(`${product.name} ürünü tamamen silinsin mi? Bu işlem geri alınamaz.`);
+  if (!confirmed) return;
+
+  setProductStatus("Ürün siliniyor...");
+  const { error } = await supabase
+    .from("products")
+    .delete()
+    .eq("name", product.name);
+
+  if (error) {
+    console.error(error);
+    setProductStatus("Ürün silinemedi. Supabase products tablosu için delete policy gerekebilir.");
+    return;
+  }
+
+  if (editingProductName === product.name) {
+    resetProductForm();
+  }
+
+  setProducts(prevProducts => prevProducts.filter(prevProduct => prevProduct.name !== product.name));
+  setFavoriteSortOrder(prevOrder => {
+    const nextOrder = { ...prevOrder };
+    delete nextOrder[product.name];
+    writeFavoriteOrderToStorage(nextOrder);
+    return nextOrder;
+  });
+  setProductStatus("Ürün silindi.");
 }
 
   async function toggleProductFavorite(product, options = {}) {
@@ -2585,21 +2618,29 @@ async function clearOrder(orderId) {
             <div className="product-list-toolbar">
               <div>
                 <h2>Ürün Listesi</h2>
-                <p>{filteredManagementProducts.length} / {products.length} ürün gösteriliyor</p>
+                <p>
+                  {filteredManagementProducts.length} / {products.length} ürün gösteriliyor
+                  {!showInactiveProducts ? " · sadece aktifler" : " · aktif ve pasifler"}
+                </p>
               </div>
-              <label className="search-box product-management-search">
-                <Search size={18} />
-                <input
-                  value={productSearchTerm}
-                  onChange={event => setProductSearchTerm(event.target.value)}
-                  placeholder="Ürün veya kategori ara"
-                />
-                {productSearchTerm && (
-                  <button type="button" onClick={() => setProductSearchTerm("")} aria-label="Aramayı temizle">
-                    <X size={16} />
-                  </button>
-                )}
-              </label>
+              <div className="product-list-tools">
+                <label className="search-box product-management-search">
+                  <Search size={18} />
+                  <input
+                    value={productSearchTerm}
+                    onChange={event => setProductSearchTerm(event.target.value)}
+                    placeholder="Ürün veya kategori ara"
+                  />
+                  {productSearchTerm && (
+                    <button type="button" onClick={() => setProductSearchTerm("")} aria-label="Aramayı temizle">
+                      <X size={16} />
+                    </button>
+                  )}
+                </label>
+                <button type="button" className="toggle-inactive-products" onClick={() => setShowInactiveProducts(prev => !prev)}>
+                  {showInactiveProducts ? "Pasifleri Gizle" : "Pasifleri Göster"}
+                </button>
+              </div>
             </div>
 
             {filteredManagementProducts.length === 0 && (
@@ -2630,6 +2671,9 @@ async function clearOrder(orderId) {
                   <button onClick={() => editProduct(product)}>Düzenle</button>
                   <button onClick={() => toggleProductActive(product)}>
                     {product.active === false ? "Aktif Yap" : "Pasif Yap"}
+                  </button>
+                  <button className="danger" onClick={() => deleteProduct(product)}>
+                    Sil
                   </button>
                 </div>
               </div>
