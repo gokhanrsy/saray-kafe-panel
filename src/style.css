@@ -7425,8 +7425,70 @@ body{
     padding-bottom:38px;
   }
 
+  .products.favorite-sort-mode .favorite-sort-card{
+    cursor:grabbing;
+    touch-action:none!important;
+  }
+
   .favorite-sort-controls{
     right:6px;
     bottom:6px;
+  }
+}
+
+/* Mobile scroll performance: avoid Safari blank/repaint lag while flinging */
+@media(max-width:719px){
+  body{
+    background-attachment:scroll!important;
+  }
+
+  .dashboard-header,
+  .modern-panel,
+  .summary-card,
+  .order-header,
+  .order-filter-panel,
+  .order-layout .cart,
+  .mobile-cart-bar,
+  .weighted-sheet,
+  .favorite-sort-controls{
+    -webkit-backdrop-filter:none!important;
+    backdrop-filter:none!important;
+  }
+
+  .order-layout .products,
+  .table-grid,
+  .dashboard-summary{
+    contain:none!important;
+    content-visibility:visible!important;
+    will-change:auto!important;
+  }
+
+  .order-layout .product-card,
+  .table-card,
+  .summary-card,
+  .cart-line{
+    content-visibility:visible!important;
+    contain:none!important;
+    filter:none!important;
+    will-change:auto!important;
+  }
+
+  .order-layout .product-card{
+    box-shadow:none!important;
+    transform:none!important;
+  }
+
+  .order-header,
+  .order-filter-panel{
+    box-shadow:0 10px 24px rgba(0,0,0,.22)!important;
+  }
+
+  .mobile-cart-bar{
+    box-shadow:0 10px 28px rgba(0,0,0,.36)!important;
+  }
+
+  .favorite-sort-card.dragging{
+    opacity:.78;
+    transform:scale(.98)!important;
   }
 }

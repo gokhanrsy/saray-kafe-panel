@@ -195,6 +195,7 @@ function App() {
   const [favoriteOrderMode, setFavoriteOrderMode] = useState(false);
   const [draggingFavoriteName, setDraggingFavoriteName] = useState(null);
   const [favoriteSortOrder, setFavoriteSortOrder] = useState(readFavoriteOrderFromStorage);
+  const favoriteDragState = useRef({ active: false, name: null, orderedNames: [], moved: false });
 
   function handleLogin(event) {
   event.preventDefault();
@@ -1238,6 +1239,69 @@ async function clearOrder(orderId) {
   const [movedName] = orderedNames.splice(currentIndex, 1);
   orderedNames.splice(nextIndex, 0, movedName);
   persistFavoriteOrder(orderedNames);
+}
+
+  function reorderFavoriteNames(sourceName, targetName) {
+  if (!sourceName || !targetName || sourceName === targetName) return null;
+
+  const names = favoriteDragState.current.orderedNames?.length
+    ? favoriteDragState.current.orderedNames
+    : getCurrentFavoriteNames();
+  const fromIndex = names.indexOf(sourceName);
+  const toIndex = names.indexOf(targetName);
+
+  if (fromIndex < 0 || toIndex < 0) return null;
+
+  const orderedNames = [...names];
+  const [movedName] = orderedNames.splice(fromIndex, 1);
+  orderedNames.splice(toIndex, 0, movedName);
+  return orderedNames;
+}
+
+  function handleFavoritePointerDown(event, productName) {
+  if (!favoriteOrderMode || category !== "Favoriler") return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+
+  event.preventDefault();
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+  favoriteDragState.current = {
+    active: true,
+    name: productName,
+    orderedNames: getCurrentFavoriteNames(),
+    moved: false
+  };
+  setDraggingFavoriteName(productName);
+}
+
+  function handleFavoritePointerMove(event) {
+  if (!favoriteDragState.current.active) return;
+  event.preventDefault();
+
+  const targetElement = document
+    .elementFromPoint(event.clientX, event.clientY)
+    ?.closest?.("[data-favorite-name]");
+  const targetName = targetElement?.getAttribute("data-favorite-name");
+  const orderedNames = reorderFavoriteNames(favoriteDragState.current.name, targetName);
+
+  if (!orderedNames) return;
+
+  favoriteDragState.current.orderedNames = orderedNames;
+  favoriteDragState.current.moved = true;
+  applyFavoriteOrderLocally(orderedNames);
+}
+
+  function handleFavoritePointerUp(event) {
+  if (!favoriteDragState.current.active) return;
+  event.preventDefault();
+  event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+  const { moved, orderedNames } = favoriteDragState.current;
+  favoriteDragState.current = { active: false, name: null, orderedNames: [], moved: false };
+  setDraggingFavoriteName(null);
+
+  if (moved && orderedNames.length > 0) {
+    persistFavoriteOrder(orderedNames);
+  }
 }
 
   function handleFavoriteDragStart(productName) {
@@ -3056,16 +3120,18 @@ async function clearOrder(orderId) {
                 type={isFavoriteSorting ? undefined : "button"}
                 className={`product-card quick-add-card ${product.favorite === true ? "is-favorite" : ""} ${isFavoriteSorting ? "favorite-sort-card" : ""} ${draggingFavoriteName === product.name ? "dragging" : ""}`}
                 key={product.name}
-                draggable={isFavoriteSorting}
+                data-favorite-name={isFavoriteSorting ? product.name : undefined}
+                draggable={false}
+                onPointerDown={isFavoriteSorting ? event => handleFavoritePointerDown(event, product.name) : () => startFavoriteLongPress(product)}
+                onPointerMove={isFavoriteSorting ? handleFavoritePointerMove : undefined}
+                onPointerUp={isFavoriteSorting ? handleFavoritePointerUp : cancelFavoriteLongPress}
+                onPointerCancel={isFavoriteSorting ? handleFavoritePointerUp : cancelFavoriteLongPress}
                 onDragStart={isFavoriteSorting ? () => handleFavoriteDragStart(product.name) : undefined}
                 onDragOver={isFavoriteSorting ? event => event.preventDefault() : undefined}
                 onDrop={isFavoriteSorting ? () => handleFavoriteDrop(product.name) : undefined}
                 onDragEnd={isFavoriteSorting ? () => setDraggingFavoriteName(null) : undefined}
                 onClick={isFavoriteSorting ? undefined : () => handleProductPress(product)}
-                onPointerDown={isFavoriteSorting ? undefined : () => startFavoriteLongPress(product)}
-                onPointerUp={isFavoriteSorting ? undefined : cancelFavoriteLongPress}
                 onPointerLeave={isFavoriteSorting ? undefined : cancelFavoriteLongPress}
-                onPointerCancel={isFavoriteSorting ? undefined : cancelFavoriteLongPress}
                 onContextMenu={event => {
                   event.preventDefault();
                   if (isFavoriteSorting) return;
@@ -3080,7 +3146,7 @@ async function clearOrder(orderId) {
                 {product.favorite === true && <span className="favorite-dot"><Star size={13} fill="currentColor" /></span>}
                 {qty > 0 && <em className="product-qty">{qty}</em>}
                 {isFavoriteSorting && (
-                  <div className="favorite-sort-controls">
+                  <div className="favorite-sort-controls" onPointerDown={event => event.stopPropagation()}>
                     <span aria-hidden="true">☰</span>
                     <button type="button" onClick={() => moveFavoriteProduct(product.name, -1)} aria-label={`${product.name} yukarı taşı`}>
                       ↑
