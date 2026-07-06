@@ -46,6 +46,33 @@ const formatSmartNumber = value => {
 
 const formatGramValue = value => `${formatSmartNumber(value)} g`;
 
+const FAVORITE_ORDER_STORAGE_KEY = "saray-favorite-product-order";
+
+const readFavoriteOrderFromStorage = () => {
+  try {
+    const storedValue = localStorage.getItem(FAVORITE_ORDER_STORAGE_KEY);
+    return storedValue ? JSON.parse(storedValue) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeFavoriteOrderToStorage = orderMap => {
+  try {
+    localStorage.setItem(FAVORITE_ORDER_STORAGE_KEY, JSON.stringify(orderMap));
+  } catch {
+    // Local storage can be unavailable in private/webview contexts. UI still works for the session.
+  }
+};
+
+const getFavoriteOrderRank = (product, localOrderMap = {}) => {
+  const databaseRank = Number(product?.favorite_order);
+  if (Number.isFinite(databaseRank)) return databaseRank;
+
+  const localRank = Number(localOrderMap[product?.name]);
+  return Number.isFinite(localRank) ? localRank : 9999;
+};
+
 const emptyExpiryForm = {
   product_name: "",
   quantity: "1",
@@ -165,6 +192,9 @@ function App() {
   const [dailyRevenueSaving, setDailyRevenueSaving] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showOnlyOpenTables, setShowOnlyOpenTables] = useState(false);
+  const [favoriteOrderMode, setFavoriteOrderMode] = useState(false);
+  const [draggingFavoriteName, setDraggingFavoriteName] = useState(null);
+  const [favoriteSortOrder, setFavoriteSortOrder] = useState(readFavoriteOrderFromStorage);
 
   function handleLogin(event) {
   event.preventDefault();
@@ -382,11 +412,16 @@ async function clearOrder(orderId) {
         product.category?.toLowerCase().includes(normalizedSearch)
       );
 
-    return [...visibleProducts].sort((a, b) =>
-      Number(b.favorite === true) - Number(a.favorite === true) ||
-      (a.name || "").localeCompare(b.name || "", "tr")
-    );
-  }, [products, category, searchTerm]);
+    return [...visibleProducts].sort((a, b) => {
+      const favoriteDiff = Number(b.favorite === true) - Number(a.favorite === true);
+      if (favoriteDiff !== 0) return favoriteDiff;
+
+      const orderDiff = getFavoriteOrderRank(a, favoriteSortOrder) - getFavoriteOrderRank(b, favoriteSortOrder);
+      if (orderDiff !== 0) return orderDiff;
+
+      return (a.name || "").localeCompare(b.name || "", "tr");
+    });
+  }, [products, category, searchTerm, favoriteSortOrder]);
 
   const favoriteProducts = useMemo(() => {
     return products.filter(product => product.active !== false && product.favorite === true);
@@ -1122,11 +1157,113 @@ async function clearOrder(orderId) {
 
   await loadProducts();
 
+  setFavoriteSortOrder(prevOrder => {
+    const nextOrder = { ...prevOrder };
+
+    if (nextFavorite) {
+      const currentMax = Math.max(-1, ...Object.values(nextOrder).map(value => Number(value)).filter(Number.isFinite));
+      nextOrder[product.name] = currentMax + 1;
+    } else {
+      delete nextOrder[product.name];
+    }
+
+    writeFavoriteOrderToStorage(nextOrder);
+    return nextOrder;
+  });
+
   if (source === "management") {
     setProductStatus(nextFavorite ? "Ürün favorilere eklendi." : "Ürün favorilerden çıkarıldı.");
   } else {
     setStatus(nextFavorite ? "Favorilere eklendi." : "Favorilerden çıkarıldı.");
   }
+}
+
+  function getCurrentFavoriteNames() {
+  return products
+    .filter(product => product.active !== false && product.favorite === true)
+    .sort((a, b) =>
+      getFavoriteOrderRank(a, favoriteSortOrder) - getFavoriteOrderRank(b, favoriteSortOrder) ||
+      (a.name || "").localeCompare(b.name || "", "tr")
+    )
+    .map(product => product.name);
+}
+
+  function applyFavoriteOrderLocally(orderedNames) {
+  const nextOrder = orderedNames.reduce((orderMap, name, index) => {
+    orderMap[name] = index;
+    return orderMap;
+  }, {});
+
+  setFavoriteSortOrder(nextOrder);
+  writeFavoriteOrderToStorage(nextOrder);
+  setProducts(prevProducts =>
+    prevProducts.map(product =>
+      Object.prototype.hasOwnProperty.call(nextOrder, product.name)
+        ? { ...product, favorite_order: nextOrder[product.name] }
+        : product
+    )
+  );
+}
+
+  async function persistFavoriteOrder(orderedNames) {
+  applyFavoriteOrderLocally(orderedNames);
+
+  const updates = orderedNames.map((name, index) =>
+    supabase
+      .from("products")
+      .update({ favorite_order: index })
+      .eq("name", name)
+  );
+
+  const results = await Promise.all(updates);
+  const error = results.find(result => result.error)?.error;
+
+  if (error) {
+    console.warn("Favorite order could not be saved to Supabase", error);
+    setStatus("Favori sırası bu cihazda kaydedildi. Kalıcı olması için products tablosuna favorite_order kolonu ekleyin.");
+    return;
+  }
+
+  setStatus("Favori sırası kaydedildi.");
+}
+
+  function moveFavoriteProduct(productName, direction) {
+  const names = getCurrentFavoriteNames();
+  const currentIndex = names.indexOf(productName);
+  const nextIndex = currentIndex + direction;
+
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= names.length) return;
+
+  const orderedNames = [...names];
+  const [movedName] = orderedNames.splice(currentIndex, 1);
+  orderedNames.splice(nextIndex, 0, movedName);
+  persistFavoriteOrder(orderedNames);
+}
+
+  function handleFavoriteDragStart(productName) {
+  setDraggingFavoriteName(productName);
+}
+
+  function handleFavoriteDrop(targetName) {
+  if (!draggingFavoriteName || draggingFavoriteName === targetName) {
+    setDraggingFavoriteName(null);
+    return;
+  }
+
+  const names = getCurrentFavoriteNames();
+  const fromIndex = names.indexOf(draggingFavoriteName);
+  const toIndex = names.indexOf(targetName);
+
+  if (fromIndex < 0 || toIndex < 0) {
+    setDraggingFavoriteName(null);
+    return;
+  }
+
+  const orderedNames = [...names];
+  const [movedName] = orderedNames.splice(fromIndex, 1);
+  orderedNames.splice(toIndex, 0, movedName);
+  setDraggingFavoriteName(null);
+  persistFavoriteOrder(orderedNames);
 }
 
   async function addStock(product) {
@@ -2874,7 +3011,14 @@ async function clearOrder(orderId) {
       <div className="order-filter-panel">
         <div className="category-row">
           {categories.map(c => (
-            <button key={c} className={category === c ? "active" : ""} onClick={() => setCategory(c)}>
+            <button
+              key={c}
+              className={category === c ? "active" : ""}
+              onClick={() => {
+                setCategory(c);
+                if (c !== "Favoriler") setFavoriteOrderMode(false);
+              }}
+            >
               {c}
             </button>
           ))}
@@ -2888,25 +3032,43 @@ async function clearOrder(orderId) {
             placeholder="Ürün ara"
           />
         </label>
+
+        {category === "Favoriler" && (
+          <div className="favorite-sort-toolbar">
+            <span>{favoriteOrderMode ? "Kartları sürükle veya oklarla sırala." : "Favorilerini kendi kullanım sıralamana göre düzenle."}</span>
+            <button type="button" onClick={() => setFavoriteOrderMode(prev => !prev)}>
+              {favoriteOrderMode ? "Sıralamayı Bitir" : "Favori Sırasını Düzenle"}
+            </button>
+          </div>
+        )}
       </div>
 
       <main className="order-main">
-        <section className="products">
+        <section className={`products ${favoriteOrderMode && category === "Favoriler" ? "favorite-sort-mode" : ""}`}>
           {filteredProducts.length === 0 && <p className="empty products-empty">Ürün bulunamadı.</p>}
 
           {filteredProducts.map(product => {
             const qty = cart[product.name]?.quantity || 0;
+            const isFavoriteSorting = category === "Favoriler" && favoriteOrderMode && product.favorite === true;
+            const ProductCard = isFavoriteSorting ? "article" : "button";
             return (
-              <button
-                className={`product-card quick-add-card ${product.favorite === true ? "is-favorite" : ""}`}
+              <ProductCard
+                type={isFavoriteSorting ? undefined : "button"}
+                className={`product-card quick-add-card ${product.favorite === true ? "is-favorite" : ""} ${isFavoriteSorting ? "favorite-sort-card" : ""} ${draggingFavoriteName === product.name ? "dragging" : ""}`}
                 key={product.name}
-                onClick={() => handleProductPress(product)}
-                onPointerDown={() => startFavoriteLongPress(product)}
-                onPointerUp={cancelFavoriteLongPress}
-                onPointerLeave={cancelFavoriteLongPress}
-                onPointerCancel={cancelFavoriteLongPress}
+                draggable={isFavoriteSorting}
+                onDragStart={isFavoriteSorting ? () => handleFavoriteDragStart(product.name) : undefined}
+                onDragOver={isFavoriteSorting ? event => event.preventDefault() : undefined}
+                onDrop={isFavoriteSorting ? () => handleFavoriteDrop(product.name) : undefined}
+                onDragEnd={isFavoriteSorting ? () => setDraggingFavoriteName(null) : undefined}
+                onClick={isFavoriteSorting ? undefined : () => handleProductPress(product)}
+                onPointerDown={isFavoriteSorting ? undefined : () => startFavoriteLongPress(product)}
+                onPointerUp={isFavoriteSorting ? undefined : cancelFavoriteLongPress}
+                onPointerLeave={isFavoriteSorting ? undefined : cancelFavoriteLongPress}
+                onPointerCancel={isFavoriteSorting ? undefined : cancelFavoriteLongPress}
                 onContextMenu={event => {
                   event.preventDefault();
+                  if (isFavoriteSorting) return;
                   if (longPressTriggered.current) return;
                   toggleProductFavorite(product, { source: "order" });
                 }}
@@ -2917,7 +3079,18 @@ async function clearOrder(orderId) {
                 </div>
                 {product.favorite === true && <span className="favorite-dot"><Star size={13} fill="currentColor" /></span>}
                 {qty > 0 && <em className="product-qty">{qty}</em>}
-              </button>
+                {isFavoriteSorting && (
+                  <div className="favorite-sort-controls">
+                    <span aria-hidden="true">☰</span>
+                    <button type="button" onClick={() => moveFavoriteProduct(product.name, -1)} aria-label={`${product.name} yukarı taşı`}>
+                      ↑
+                    </button>
+                    <button type="button" onClick={() => moveFavoriteProduct(product.name, 1)} aria-label={`${product.name} aşağı taşı`}>
+                      ↓
+                    </button>
+                  </div>
+                )}
+              </ProductCard>
             );
           })}
         </section>
