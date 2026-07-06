@@ -154,6 +154,7 @@ function App() {
   const [weightedGrams, setWeightedGrams] = useState("");
   const favoritePressTimer = useRef(null);
   const longPressTriggered = useRef(false);
+  const productFormRef = useRef(null);
   const [reportDate, setReportDate] = useState(() => getDateInputValue(new Date()));
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -170,6 +171,7 @@ function App() {
   const [productForm, setProductForm] = useState(emptyProductForm);
   const [productStatus, setProductStatus] = useState("");
   const [productSaving, setProductSaving] = useState(false);
+  const [productSearchTerm, setProductSearchTerm] = useState("");
   const [stockSearchTerm, setStockSearchTerm] = useState("");
   const [stockEntryAmounts, setStockEntryAmounts] = useState({});
   const [stockEntryNotes, setStockEntryNotes] = useState({});
@@ -428,6 +430,17 @@ async function clearOrder(orderId) {
   const favoriteProducts = useMemo(() => {
     return products.filter(product => product.active !== false && product.favorite === true);
   }, [products]);
+
+  const filteredManagementProducts = useMemo(() => {
+    const normalizedSearch = productSearchTerm.trim().toLowerCase();
+
+    return products.filter(product =>
+      !normalizedSearch ||
+      product.name?.toLowerCase().includes(normalizedSearch) ||
+      product.category?.toLowerCase().includes(normalizedSearch) ||
+      product.unit_type?.toLowerCase().includes(normalizedSearch)
+    );
+  }, [products, productSearchTerm]);
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
@@ -1065,6 +1078,13 @@ async function clearOrder(orderId) {
     unit_type: product.unit_type || "piece"
   });
   setProductStatus("");
+  window.setTimeout(() => {
+    productFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    productFormRef.current?.classList.add("form-focus-pulse");
+    window.setTimeout(() => {
+      productFormRef.current?.classList.remove("form-focus-pulse");
+    }, 900);
+  }, 50);
 }
 
   async function saveProduct(event) {
@@ -2477,7 +2497,7 @@ async function clearOrder(orderId) {
         </header>
 
         <section className="product-admin-layout">
-          <form className="product-form" onSubmit={saveProduct}>
+          <form className="product-form" onSubmit={saveProduct} ref={productFormRef}>
             <h2>{editingProductName ? "Ürünü Düzenle" : "Yeni Ürün"}</h2>
 
             <label>
@@ -2562,7 +2582,31 @@ async function clearOrder(orderId) {
           </form>
 
           <section className="product-admin-list">
-            {products.map(product => (
+            <div className="product-list-toolbar">
+              <div>
+                <h2>Ürün Listesi</h2>
+                <p>{filteredManagementProducts.length} / {products.length} ürün gösteriliyor</p>
+              </div>
+              <label className="search-box product-management-search">
+                <Search size={18} />
+                <input
+                  value={productSearchTerm}
+                  onChange={event => setProductSearchTerm(event.target.value)}
+                  placeholder="Ürün veya kategori ara"
+                />
+                {productSearchTerm && (
+                  <button type="button" onClick={() => setProductSearchTerm("")} aria-label="Aramayı temizle">
+                    <X size={16} />
+                  </button>
+                )}
+              </label>
+            </div>
+
+            {filteredManagementProducts.length === 0 && (
+              <p className="empty product-empty">Aramaya uygun ürün bulunamadı.</p>
+            )}
+
+            {filteredManagementProducts.map(product => (
               <div className={`product-row ${product.active === false ? "inactive" : ""}`} key={product.name}>
                 <div>
                   <strong>{product.name}</strong>
