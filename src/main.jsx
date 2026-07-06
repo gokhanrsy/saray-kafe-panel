@@ -194,8 +194,9 @@ function App() {
   const [showOnlyOpenTables, setShowOnlyOpenTables] = useState(false);
   const [favoriteOrderMode, setFavoriteOrderMode] = useState(false);
   const [draggingFavoriteName, setDraggingFavoriteName] = useState(null);
+  const [favoriteDragPreview, setFavoriteDragPreview] = useState(null);
   const [favoriteSortOrder, setFavoriteSortOrder] = useState(readFavoriteOrderFromStorage);
-  const favoriteDragState = useRef({ active: false, name: null, orderedNames: [], moved: false });
+  const favoriteDragState = useRef({ active: false, name: null, orderedNames: [], targetName: null });
 
   function handleLogin(event) {
   event.preventDefault();
@@ -1241,12 +1242,10 @@ async function clearOrder(orderId) {
   persistFavoriteOrder(orderedNames);
 }
 
-  function reorderFavoriteNames(sourceName, targetName) {
+  function reorderFavoriteNames(sourceName, targetName, baseNames = null) {
   if (!sourceName || !targetName || sourceName === targetName) return null;
 
-  const names = favoriteDragState.current.orderedNames?.length
-    ? favoriteDragState.current.orderedNames
-    : getCurrentFavoriteNames();
+  const names = baseNames?.length ? baseNames : getCurrentFavoriteNames();
   const fromIndex = names.indexOf(sourceName);
   const toIndex = names.indexOf(targetName);
 
@@ -1268,9 +1267,10 @@ async function clearOrder(orderId) {
     active: true,
     name: productName,
     orderedNames: getCurrentFavoriteNames(),
-    moved: false
+    targetName: null
   };
   setDraggingFavoriteName(productName);
+  setFavoriteDragPreview({ name: productName, x: event.clientX, y: event.clientY, targetName: null });
 }
 
   function handleFavoritePointerMove(event) {
@@ -1281,13 +1281,15 @@ async function clearOrder(orderId) {
     .elementFromPoint(event.clientX, event.clientY)
     ?.closest?.("[data-favorite-name]");
   const targetName = targetElement?.getAttribute("data-favorite-name");
-  const orderedNames = reorderFavoriteNames(favoriteDragState.current.name, targetName);
+  const safeTargetName = targetName && targetName !== favoriteDragState.current.name ? targetName : null;
 
-  if (!orderedNames) return;
-
-  favoriteDragState.current.orderedNames = orderedNames;
-  favoriteDragState.current.moved = true;
-  applyFavoriteOrderLocally(orderedNames);
+  favoriteDragState.current.targetName = safeTargetName;
+  setFavoriteDragPreview({
+    name: favoriteDragState.current.name,
+    x: event.clientX,
+    y: event.clientY,
+    targetName: safeTargetName
+  });
 }
 
   function handleFavoritePointerUp(event) {
@@ -1295,11 +1297,13 @@ async function clearOrder(orderId) {
   event.preventDefault();
   event.currentTarget.releasePointerCapture?.(event.pointerId);
 
-  const { moved, orderedNames } = favoriteDragState.current;
-  favoriteDragState.current = { active: false, name: null, orderedNames: [], moved: false };
+  const { name, targetName, orderedNames: baseNames } = favoriteDragState.current;
+  const orderedNames = reorderFavoriteNames(name, targetName, baseNames);
+  favoriteDragState.current = { active: false, name: null, orderedNames: [], targetName: null };
   setDraggingFavoriteName(null);
+  setFavoriteDragPreview(null);
 
-  if (moved && orderedNames.length > 0) {
+  if (orderedNames?.length > 0) {
     persistFavoriteOrder(orderedNames);
   }
 }
@@ -3118,7 +3122,7 @@ async function clearOrder(orderId) {
             return (
               <ProductCard
                 type={isFavoriteSorting ? undefined : "button"}
-                className={`product-card quick-add-card ${product.favorite === true ? "is-favorite" : ""} ${isFavoriteSorting ? "favorite-sort-card" : ""} ${draggingFavoriteName === product.name ? "dragging" : ""}`}
+                className={`product-card quick-add-card ${product.favorite === true ? "is-favorite" : ""} ${isFavoriteSorting ? "favorite-sort-card" : ""} ${draggingFavoriteName === product.name ? "dragging" : ""} ${favoriteDragPreview?.targetName === product.name ? "drop-target" : ""}`}
                 key={product.name}
                 data-favorite-name={isFavoriteSorting ? product.name : undefined}
                 draggable={false}
@@ -3160,6 +3164,24 @@ async function clearOrder(orderId) {
             );
           })}
         </section>
+
+        {favoriteDragPreview && (() => {
+          const previewProduct = products.find(product => product.name === favoriteDragPreview.name);
+          if (!previewProduct) return null;
+
+          return (
+            <div
+              className="favorite-drag-ghost"
+              style={{
+                left: favoriteDragPreview.x,
+                top: favoriteDragPreview.y
+              }}
+            >
+              <strong>{previewProduct.name}</strong>
+              <b>{formatPrice(previewProduct.price)}{previewProduct.unit_type === "weighted" ? " / kg" : ""}</b>
+            </div>
+          );
+        })()}
 
         {mobileCartOpen && <button className="mobile-cart-backdrop" onClick={() => setMobileCartOpen(false)} aria-label="Adisyonu kapat" />}
 
