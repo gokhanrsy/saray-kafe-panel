@@ -142,9 +142,8 @@ function App() {
   const [isCurrentOrderPending, setIsCurrentOrderPending] = useState(false);
   const [transferMode, setTransferMode] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
-  const [splitType, setSplitType] = useState("equal");
-  const [splitPeople, setSplitPeople] = useState(2);
   const [splitSelections, setSplitSelections] = useState({});
+  const [splitPaymentSaving, setSplitPaymentSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [orderNoteOpen, setOrderNoteOpen] = useState(false);
@@ -460,10 +459,7 @@ async function clearOrder(orderId) {
   const splitSelectedTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
       const selectedQuantity = getSplitSelectionValue(item);
-      if (isWeightedCartItem(item)) {
-        return sum + Math.min(selectedQuantity, Number(item.price || 0) * Number(item.quantity || 1));
-      }
-      return sum + item.price * selectedQuantity;
+      return sum + Number(item.price || 0) * selectedQuantity;
     }, 0);
   }, [cartItems, splitSelections]);
 
@@ -1677,12 +1673,7 @@ async function clearOrder(orderId) {
 }
 
   function setSplitItemQuantity(item, quantity) {
-  if (isWeightedCartItem(item)) {
-    setSplitWeightedAmount(item, quantity);
-    return;
-  }
-
-  const safeQuantity = Math.max(0, Math.min(Number(quantity || 0), item.quantity));
+  const safeQuantity = Math.max(0, Math.min(Math.floor(Number(quantity || 0)), Number(item.quantity || 0)));
 
   setSplitSelections(prev => ({
     ...prev,
@@ -1690,9 +1681,17 @@ async function clearOrder(orderId) {
   }));
 }
 
-  function adjustSplitItemQuantity(item, change) {
+  function addSplitItemQuantity(item) {
   const currentQuantity = getSplitSelectionValue(item);
-  setSplitItemQuantity(item, currentQuantity + change);
+  setSplitItemQuantity(item, currentQuantity + 1);
+}
+
+  function resetSplitItemQuantity(item) {
+  setSplitItemQuantity(item, 0);
+}
+
+  function resetAllSplitSelections() {
+  setSplitSelections({});
 }
 
   function hasSplitSelection(item) {
@@ -1701,308 +1700,122 @@ async function clearOrder(orderId) {
 
   function getSplitSelectionValue(item) {
   if (hasSplitSelection(item)) return Number(splitSelections[item.name] || 0);
-  if (isWeightedCartItem(item)) return Number(item.price || 0) * Number(item.quantity || 1);
-  return Number(item.quantity || 0);
+  return 0;
 }
 
-  function setSplitWeightedAmount(item, amountValue) {
-  const amount = parseDecimalInput(amountValue);
-  const totalAmount = Number(item.price || 0) * Number(item.quantity || 1);
-  const safeAmount = Math.max(0, Math.min(amount, totalAmount));
-
-  setSplitSelections(prev => ({
-    ...prev,
-    [item.name]: safeAmount
-  }));
-}
-
-  function setSplitWeightedGrams(item, gramsValue) {
-  const totalGrams = Number(item.grams || 0) * Number(item.quantity || 1);
-  const grams = parseGramInput(gramsValue);
-  const safeGrams = Math.max(0, Math.min(grams, totalGrams));
-  const totalAmount = Number(item.price || 0) * Number(item.quantity || 1);
-  const amount = totalGrams > 0 ? (safeGrams / totalGrams) * totalAmount : 0;
-
-  setSplitSelections(prev => ({
-    ...prev,
-    [item.name]: Number(amount.toFixed(2))
-  }));
-}
-
-  function getSplitWeightedGramsValue(item) {
-  const selectedAmount = getSplitSelectionValue(item);
-  const totalAmount = Number(item.price || 0) * Number(item.quantity || 1);
-  const totalGrams = Number(item.grams || 0) * Number(item.quantity || 1);
-
-  if (selectedAmount <= 0 || totalAmount <= 0 || totalGrams <= 0) return "";
-  return formatSmartNumber((selectedAmount / totalAmount) * totalGrams);
-}
 
   async function paySelectedSplitItems() {
+  if (splitPaymentSaving) return;
+
   if (!currentOrderId || !isCurrentOrderPending) {
-    setStatus("Sadece açık hesaplar bölünebilir.");
+    setStatus("Sadece açık adisyonlarda kısmi ödeme alınabilir.");
     return;
   }
 
   const selectedItems = cartItems
-    .map(item => [item.name, getSplitSelectionValue(item)])
-    .filter(([, quantity]) => Number(quantity || 0) > 0);
+    .map(item => ({
+      product_name: item.name,
+      quantity: Math.min(
+        Math.floor(getSplitSelectionValue(item)),
+        Number(item.quantity || 0)
+      )
+    }))
+    .filter(item => item.quantity > 0);
 
   if (selectedItems.length === 0) {
-    setStatus("Ödenecek ürün seç.");
+    setStatus("Ödeme için en az bir ürün seç.");
     return;
   }
 
-  setStatus("Seçilenler ödeniyor...");
+  setSplitPaymentSaving(true);
+  setStatus("Seçilen ürünlerin ödemesi alınıyor...");
 
-  const { data: latestItems, error: itemsError } = await supabase
-    .from("order_items")
-    .select("*")
-    .eq("order_id", currentOrderId);
-
-  if (itemsError) {
-    console.error(itemsError);
-    setStatus("Adisyon ürünleri alınamadı.");
-    return;
-  }
-
-  const latestItemsByName = (latestItems || []).reduce((itemsByName, item) => {
-    itemsByName[item.product_name] = item;
-    return itemsByName;
-  }, {});
-
-  const splitPaymentPayload = selectedItems.map(([productName, quantity]) => ({
-    productName,
-    selectedQuantity: Number(quantity || 0),
-    currentQuantity: Number(latestItemsByName[productName]?.quantity || 0)
-  }));
-
-  console.log("Selected split payment payload", splitPaymentPayload);
-
-  for (const item of cartItems) {
-    const latestItem = latestItemsByName[item.name];
-    if (!latestItem) continue;
-
-    if (isWeightedCartItem(item)) {
-      const currentLineTotal = Number(latestItem.total_price || latestItem.unit_price || item.price || 0);
-      const paidAmount = Math.min(getSplitSelectionValue(item), currentLineTotal);
-      const remainingLineTotal = Math.max(0, currentLineTotal - paidAmount);
-
-      if (paidAmount <= 0) continue;
-
-      console.log("Skipping weighted split stock deduction", {
-        productName: item.name,
-        paidAmount
-      });
-
-      if (remainingLineTotal <= 0.009) {
-        const { error: deleteError } = await supabase
-          .from("order_items")
-          .delete()
-          .eq("order_id", currentOrderId)
-          .eq("product_name", item.name);
-
-        if (deleteError) {
-          console.error(deleteError);
-          setStatus("Ödenen tartılı ürün silinemedi.");
-          return;
-        }
-      } else {
-        const { error: updateItemError } = await supabase
-          .from("order_items")
-          .update({
-            quantity: 1,
-            unit_price: remainingLineTotal,
-            total_price: remainingLineTotal
-          })
-          .eq("order_id", currentOrderId)
-          .eq("product_name", item.name);
-
-        if (updateItemError) {
-          console.error(updateItemError);
-          setStatus("Tartılı ürün güncellenemedi.");
-          return;
-        }
-      }
-
-      continue;
-    }
-
-    const paidQuantity = Math.min(
-      getSplitSelectionValue(item),
-      Number(latestItem.quantity || 0)
-    );
-    const remainingQuantity = Number(latestItem.quantity || 0) - paidQuantity;
-    const unitPrice = Number(latestItem.unit_price || item.price || 0);
-    const remainingLineTotal = unitPrice * remainingQuantity;
-
-    if (paidQuantity <= 0) continue;
-
-    const { data: currentProduct, error: stockReadError } = await supabase
-      .from("products")
-      .select("name,stock")
-      .eq("name", item.name)
-      .single();
-
-    if (stockReadError) {
-      console.error("Split stock read failed", {
-        productName: item.name,
-        error: stockReadError
-      });
-      setStatus("Stok bilgisi alınamadı.");
-      return;
-    }
-
-    const currentDatabaseStock = Number(currentProduct?.stock || 0);
-    const newStock = Math.max(0, currentDatabaseStock - paidQuantity);
-
-    console.log("Split stock update", {
-      productName: item.name,
-      currentDatabaseStock,
-      paidQuantity,
-      newStock
+  try {
+    const { data, error } = await supabase.rpc("process_partial_payment", {
+      p_order_id: String(currentOrderId),
+      p_items: selectedItems,
+      p_table_name: selectedTable,
+      p_note: orderNote.trim() || null
     });
 
-    const { error: stockUpdateError } = await supabase
-      .from("products")
-      .update({ stock: newStock })
-      .eq("name", item.name);
-
-    if (stockUpdateError) {
-      console.error("Split stock update failed", {
-        productName: item.name,
-        attemptedStock: newStock,
-        error: stockUpdateError
-      });
-      setStatus("Stok güncellenemedi.");
+    if (error) {
+      console.error("Partial payment RPC failed", error);
+      const functionMissing = error.code === "PGRST202" ||
+        String(error.message || "").includes("process_partial_payment");
+      setStatus(
+        functionMissing
+          ? "Kısmi ödeme fonksiyonu kurulu değil. supabase/partial_payment.sql dosyasını çalıştırın."
+          : `Kısmi ödeme alınamadı: ${error.message || "Veritabanını kontrol edin."}`
+      );
       return;
     }
 
-    const { error: movementError } = await supabase
-      .from("stock_movements")
-      .insert({
-        product_name: item.name,
-        movement_type: "sale",
-        quantity: -paidQuantity,
-        note: `${selectedTable} split payment`
-      });
+    const paymentResult = Array.isArray(data) ? data[0] : data;
+    const orderClosed = paymentResult?.closed === true;
 
-    if (movementError) {
-      console.error("Split stock movement insert failed", {
-        productName: item.name,
-        quantity: -paidQuantity,
-        error: movementError
-      });
+    setSplitSelections({});
+    setSplitMode(false);
+    await loadProducts();
+    await loadOpenOrders();
+
+    if (orderClosed) {
+      setCart({});
+      setCurrentOrderId(null);
+      setIsCurrentOrderPending(false);
+      setSelectedTable(null);
+      setOrderNote("");
+      setTransferMode(false);
+      setMobileCartOpen(false);
+      setStatus("");
+      setScreen("tables");
+      return;
     }
 
-    if (remainingQuantity <= 0) {
-      const { error: deleteError } = await supabase
-        .from("order_items")
-        .delete()
-        .eq("order_id", currentOrderId)
-        .eq("product_name", item.name);
+    const { data: remainingItems, error: remainingItemsError } = await supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", currentOrderId);
 
-      if (deleteError) {
-        console.error(deleteError);
-        setStatus("Ödenen ürün silinemedi.");
-        return;
-      }
-    } else {
-      const { error: updateItemError } = await supabase
-        .from("order_items")
-        .update({
-          quantity: remainingQuantity,
-          total_price: remainingLineTotal
-        })
-        .eq("order_id", currentOrderId)
-        .eq("product_name", item.name);
-
-      if (updateItemError) {
-        console.error(updateItemError);
-        setStatus("Adisyon ürünü güncellenemedi.");
-        return;
-      }
+    if (remainingItemsError) {
+      console.error("Remaining order items could not be loaded", remainingItemsError);
+      setStatus("Ödeme alındı. Kalan adisyonu yenilemek için masaya yeniden girin.");
+      setScreen("tables");
+      return;
     }
-  }
 
-  const { data: remainingItems, error: remainingItemsError } = await supabase
-    .from("order_items")
-    .select("*")
-    .eq("order_id", currentOrderId);
+    const nextCart = {};
 
-  if (remainingItemsError) {
-    console.error(remainingItemsError);
-    setStatus("Kalan adisyon ürünleri alınamadı.");
-    return;
-  }
+    for (const remainingItem of remainingItems || []) {
+      const unitPrice = Number(remainingItem.unit_price || 0);
+      const quantity = Number(remainingItem.quantity || 0);
+      if (quantity <= 0) continue;
 
-  console.log("Updated remaining split items", remainingItems || []);
+      const baseName = getWeightedBaseName({ name: remainingItem.product_name });
+      const baseProduct = products.find(product => product.name === baseName);
+      const weighted = baseProduct?.unit_type === "weighted" || / - \d+([.,]\d+)? TL$/.test(remainingItem.product_name);
+      const grams = weighted && Number(baseProduct?.price || 0) > 0
+        ? Math.round((unitPrice / Number(baseProduct.price)) * 1000)
+        : null;
 
-  const nextCart = {};
-  const remainingTotal = (remainingItems || []).reduce((sum, item) => {
-    const unitPrice = Number(item.unit_price || 0);
-    const quantity = Number(item.quantity || 0);
-    const baseName = getWeightedBaseName({ name: item.product_name });
-    const baseProduct = products.find(product => product.name === baseName);
-    const isWeighted = baseProduct?.unit_type === "weighted" || / - \d+([.,]\d+)? TL$/.test(item.product_name);
-    const grams = isWeighted && Number(baseProduct?.price || 0) > 0
-      ? Math.round((unitPrice / Number(baseProduct.price || 0)) * 1000)
-      : null;
-
-    if (quantity > 0) {
-      nextCart[item.product_name] = {
-        name: item.product_name,
+      nextCart[remainingItem.product_name] = {
+        name: remainingItem.product_name,
         price: unitPrice,
         quantity,
         grams,
         product: {
-          name: isWeighted ? baseName : item.product_name,
-          price: isWeighted ? Number(baseProduct?.price || unitPrice) : unitPrice,
-          unit_type: isWeighted ? "weighted" : baseProduct?.unit_type || "piece",
+          name: weighted ? baseName : remainingItem.product_name,
+          price: weighted ? Number(baseProduct?.price || unitPrice) : unitPrice,
+          unit_type: weighted ? "weighted" : baseProduct?.unit_type || "piece",
           grams
         }
       };
     }
 
-    return sum + Number(item.total_price || unitPrice * quantity);
-  }, 0);
-
-  const allPaid = remainingTotal <= 0;
-  const { error: orderError } = await supabase
-    .from("orders")
-    .update({
-      total_price: remainingTotal,
-      paid: allPaid,
-      status: allPaid ? "completed" : "pending"
-    })
-    .eq("id", currentOrderId)
-    .eq("status", "pending");
-
-  if (orderError) {
-    console.error(orderError);
-    setStatus("Adisyon güncellenemedi.");
-    return;
+    setCart(nextCart);
+    setStatus(`Ödeme alındı. Adisyonda ${formatPrice(paymentResult?.remaining_total || 0)} kaldı.`);
+  } finally {
+    setSplitPaymentSaving(false);
   }
-
-  setSplitSelections({});
-  setSplitMode(false);
-
-  if (allPaid) {
-    setCart({});
-    setCurrentOrderId(null);
-    setIsCurrentOrderPending(false);
-    setSelectedTable(null);
-    setOrderNote("");
-    setMobileCartOpen(false);
-    setStatus("");
-    await loadOpenOrders();
-    setScreen("tables");
-    return;
-  }
-
-  setCart(nextCart);
-  setStatus("Seçilen ürünler ödendi.");
-  await loadOpenOrders();
 }
 
   async function saveOrder(markPaid = false, options = {}) {
@@ -3363,106 +3176,89 @@ async function clearOrder(orderId) {
 
           {isCurrentOrderPending && currentOrderId && (
             <div className="split-panel">
-              <button className="split-toggle" onClick={() => setSplitMode(prev => !prev)}>
-                Adisyon Böl
+              <button
+                className="split-toggle"
+                onClick={() => setSplitMode(prev => {
+                  const nextMode = !prev;
+                  if (nextMode) resetAllSplitSelections();
+                  return nextMode;
+                })}
+              >
+                Kısmi Ödeme
               </button>
 
               {splitMode && (
                 <div className="split-content">
-                  <div className="split-tabs">
-                    <button className={splitType === "equal" ? "active" : ""} onClick={() => setSplitType("equal")}>
-                      Eşit Böl
-                    </button>
-                    <button className={splitType === "items" ? "active" : ""} onClick={() => setSplitType("items")}>
-                      Ürün Seçerek Öde
+                  <div className="split-selection-head">
+                    <div>
+                      <strong>Ödenecek ürünleri seç</strong>
+                      <span>Seçim 0'dan başlar. Her dokunuşta 1 adet eklenir.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetAllSplitSelections}
+                      disabled={splitSelectedTotal <= 0}
+                    >
+                      Tümünü Sıfırla
                     </button>
                   </div>
 
-                  {splitType === "equal" && (
-                    <div className="equal-split">
-                      <label>
-                        Kişi sayısı
-                        <input
-                          type="number"
-                          min="1"
-                          value={splitPeople}
-                          onChange={event => setSplitPeople(Math.max(1, Number(event.target.value || 1)))}
-                        />
-                      </label>
-                      <div>
-                        <span>Kişi başı</span>
-                        <strong>{formatPrice(total / Math.max(1, splitPeople))}</strong>
-                      </div>
-                    </div>
-                  )}
+                  <div className="item-split">
+                    {cartItems.map(item => {
+                      const selectedQuantity = getSplitSelectionValue(item);
+                      const orderedQuantity = Number(item.quantity || 0);
 
-                  {splitType === "items" && (
-                    <div className="item-split">
-                      {cartItems.map(item => (
-                        <div className="split-line" key={item.name}>
+                      return (
+                        <div className={`split-line ${selectedQuantity > 0 ? "selected" : ""}`} key={item.name}>
                           <div>
                             <strong>{item.name}</strong>
                             <span>
                               {isWeightedCartItem(item)
                                 ? `${formatGramValue(Number(item.grams || 0) * item.quantity)} · ${formatPrice(item.price * item.quantity)}`
-                                : `${item.quantity} adet · ${formatPrice(item.price)}`}
+                                : `${orderedQuantity} adet · ${formatPrice(item.price)}`}
                             </span>
                           </div>
-                          {isWeightedCartItem(item) ? (
-                            <div className="split-weighted-inputs">
-                              <label>
-                                TL düş
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={formatSmartNumber(getSplitSelectionValue(item))}
-                                  onChange={event => setSplitWeightedAmount(item, event.target.value)}
-                                  placeholder="0"
-                                />
-                              </label>
-                              <label>
-                                Gram düş
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={getSplitWeightedGramsValue(item)}
-                                  onChange={event => setSplitWeightedGrams(item, event.target.value)}
-                                  placeholder="0"
-                                />
-                              </label>
+
+                          <div className="split-add-control">
+                            <div>
+                              <span>Ödenecek</span>
+                              <strong>{selectedQuantity} / {orderedQuantity}</strong>
                             </div>
-                          ) : (
-                            <div className="split-stepper">
-                              <button
-                                type="button"
-                                onClick={() => adjustSplitItemQuantity(item, -1)}
-                                disabled={getSplitSelectionValue(item) <= 0}
-                              >
-                                -
-                              </button>
-                              <strong>{getSplitSelectionValue(item)}</strong>
-                              <button
-                                type="button"
-                                onClick={() => adjustSplitItemQuantity(item, 1)}
-                                disabled={getSplitSelectionValue(item) >= Number(item.quantity || 0)}
-                              >
-                                +
-                              </button>
-                            </div>
-                          )}
+                            <button
+                              type="button"
+                              className="split-add-button"
+                              onClick={() => addSplitItemQuantity(item)}
+                              disabled={selectedQuantity >= orderedQuantity || splitPaymentSaving}
+                              aria-label={`${item.name} ödeme seçimine ekle`}
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              className="split-reset-button"
+                              onClick={() => resetSplitItemQuantity(item)}
+                              disabled={selectedQuantity <= 0 || splitPaymentSaving}
+                            >
+                              Sıfırla
+                            </button>
+                          </div>
                         </div>
-                      ))}
+                      );
+                    })}
 
-                      <div className="split-total">
-                        <span>Ödenecek Ara Toplam</span>
-                        <strong>{formatPrice(splitSelectedTotal)}</strong>
-                      </div>
-
-                      <button className="split-pay" onClick={paySelectedSplitItems}>
-                        Seçilenleri Öde
-                      </button>
+                    <div className="split-total">
+                      <span>Ödenecek Ara Toplam</span>
+                      <strong>{formatPrice(splitSelectedTotal)}</strong>
                     </div>
-                  )}
+
+                    <button
+                      className="split-pay"
+                      onClick={paySelectedSplitItems}
+                      disabled={splitSelectedTotal <= 0 || splitPaymentSaving}
+                    >
+                      {splitPaymentSaving ? "Ödeme İşleniyor..." : "Seçilenlerin Ödemesini Al"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

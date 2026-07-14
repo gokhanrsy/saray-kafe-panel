@@ -7636,3 +7636,151 @@ body{
     min-height:64px;
   }
 }
+
+/* Partial payment v2: zero-based, add-only selection */
+.split-selection-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+  padding:11px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:15px;
+  background:rgba(255,255,255,.04);
+}
+
+.split-selection-head > div{
+  min-width:0;
+}
+
+.split-selection-head strong,
+.split-selection-head span{
+  display:block;
+}
+
+.split-selection-head strong{
+  font-size:14px;
+}
+
+.split-selection-head span{
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.3;
+}
+
+.split-selection-head > button{
+  min-height:38px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;
+  padding:0 11px;
+  color:#fff;
+  background:rgba(255,255,255,.075);
+  font-size:11px;
+  font-weight:850;
+  white-space:nowrap;
+}
+
+.split-selection-head > button:disabled{
+  opacity:.38;
+}
+
+.split-line.selected{
+  border-color:rgba(255,211,107,.32);
+  background:rgba(255,211,107,.07);
+}
+
+.split-add-control{
+  display:grid;
+  grid-template-columns:minmax(64px,auto) 44px minmax(58px,auto);
+  align-items:center;
+  justify-content:end;
+  gap:6px;
+}
+
+.split-add-control > div{
+  min-width:64px;
+  text-align:right;
+}
+
+.split-add-control > div span,
+.split-add-control > div strong{
+  display:block;
+}
+
+.split-add-control > div span{
+  color:var(--muted);
+  font-size:10px;
+}
+
+.split-add-control > div strong{
+  margin-top:2px;
+  color:#ffd36b;
+  font-size:16px;
+}
+
+.split-add-button,
+.split-reset-button{
+  min-height:42px;
+  border-radius:12px;
+  font-weight:950;
+}
+
+.split-add-button{
+  width:44px;
+  border:0;
+  color:#171006;
+  background:#ffd36b;
+  font-size:25px;
+  line-height:1;
+}
+
+.split-reset-button{
+  border:1px solid rgba(255,255,255,.1);
+  padding:0 9px;
+  color:#dfe7ed;
+  background:rgba(255,255,255,.065);
+  font-size:10px;
+}
+
+.split-add-button:disabled,
+.split-reset-button:disabled,
+.split-pay:disabled{
+  cursor:not-allowed;
+  opacity:.38;
+}
+
+@media(max-width:719px){
+  .split-selection-head{
+    align-items:stretch;
+    flex-direction:column;
+  }
+
+  .split-selection-head > button{
+    width:100%;
+  }
+
+  .split-add-control{
+    grid-template-columns:minmax(66px,1fr) 48px 64px;
+    width:100%;
+    justify-content:stretch;
+  }
+
+  .split-add-control > div{
+    text-align:left;
+  }
+
+  .split-add-button{
+    width:48px;
+    min-height:46px;
+  }
+
+  .split-reset-button{
+    min-height:46px;
+  }
+
+  .split-pay{
+    min-height:50px!important;
+  }
+}
