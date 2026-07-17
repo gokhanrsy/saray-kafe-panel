@@ -159,6 +159,8 @@ function App() {
   const favoritePressTimer = useRef(null);
   const longPressTriggered = useRef(false);
   const productFormRef = useRef(null);
+  const dailyRevenueFormRef = useRef(null);
+  const dailyRevenueRequestRef = useRef(0);
   const [reportDate, setReportDate] = useState(() => getDateInputValue(new Date()));
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -197,6 +199,8 @@ function App() {
   const [dailyRevenues, setDailyRevenues] = useState([]);
   const [dailyRevenueStatus, setDailyRevenueStatus] = useState("");
   const [dailyRevenueSaving, setDailyRevenueSaving] = useState(false);
+  const [dailyRevenueLoading, setDailyRevenueLoading] = useState(false);
+  const [editingDailyRevenueId, setEditingDailyRevenueId] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showOnlyOpenTables, setShowOnlyOpenTables] = useState(false);
   const [favoriteOrderMode, setFavoriteOrderMode] = useState(false);
@@ -859,6 +863,10 @@ async function clearOrder(orderId) {
   setMobileNavOpen(false);
   setScreen("daily-revenue");
   loadDailyRevenues();
+  loadDailyRevenueForDate(
+    dailyRevenueForm.revenue_date || getDateInputValue(new Date()),
+    { silent: true }
+  );
 }
 
   async function loadDailyRevenues() {
@@ -878,8 +886,68 @@ async function clearOrder(orderId) {
   setDailyRevenues(data || []);
 }
 
+  async function loadDailyRevenueForDate(dateValue, options = {}) {
+  if (!dateValue) {
+    setEditingDailyRevenueId(null);
+    setDailyRevenueForm(createDailyRevenueForm(""));
+    setDailyRevenueStatus("Tarih seçmek zorunlu.");
+    return;
+  }
+
+  const silent = options.silent === true;
+  const requestId = dailyRevenueRequestRef.current + 1;
+  dailyRevenueRequestRef.current = requestId;
+  setDailyRevenueLoading(true);
+  setDailyRevenueForm(createDailyRevenueForm(dateValue));
+  setEditingDailyRevenueId(null);
+  if (!silent) setDailyRevenueStatus("Seçilen tarihin kapanışı yükleniyor...");
+
+  const { data, error } = await supabase
+    .from("daily_revenues")
+    .select("*")
+    .eq("revenue_date", dateValue)
+    .maybeSingle();
+
+  if (requestId !== dailyRevenueRequestRef.current) return;
+
+  if (error) {
+    console.error("Daily revenue record could not be loaded", error);
+    setDailyRevenueStatus(`Ciro kaydı yüklenemedi: ${error.message || "Supabase bağlantısını kontrol edin."}`);
+    setDailyRevenueLoading(false);
+    return;
+  }
+
+  if (data) {
+    setEditingDailyRevenueId(data.id);
+    setDailyRevenueForm({
+      revenue_date: data.revenue_date,
+      cash_amount: String(data.cash_amount ?? ""),
+      card_amount: String(data.card_amount ?? ""),
+      other_amount: String(data.other_amount ?? ""),
+      note: data.note || ""
+    });
+    setDailyRevenueStatus("Kayıt yüklendi. Değişiklik yapıp güncelleyebilirsiniz.");
+  } else {
+    setDailyRevenueForm(createDailyRevenueForm(dateValue));
+    setDailyRevenueStatus("Bu tarih için kayıt yok. Yeni kapanış oluşturabilirsiniz.");
+  }
+
+  setDailyRevenueLoading(false);
+
+  if (options.scrollToForm) {
+    window.setTimeout(() => {
+      dailyRevenueFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      dailyRevenueFormRef.current?.classList.add("form-focus-pulse");
+      window.setTimeout(() => {
+        dailyRevenueFormRef.current?.classList.remove("form-focus-pulse");
+      }, 900);
+    }, 50);
+  }
+}
+
   function resetDailyRevenueForm() {
   setDailyRevenueForm(createDailyRevenueForm(getDateInputValue(new Date())));
+  setEditingDailyRevenueId(null);
   setDailyRevenueStatus("");
 }
 
@@ -932,9 +1000,11 @@ async function clearOrder(orderId) {
     .eq("revenue_date", dailyRevenueForm.revenue_date)
     .maybeSingle();
 
-  const { error } = await supabase
+  const { data: savedRecord, error } = await supabase
     .from("daily_revenues")
-    .upsert(payload, { onConflict: "revenue_date" });
+    .upsert(payload, { onConflict: "revenue_date" })
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Daily revenue could not be saved", error);
@@ -944,6 +1014,7 @@ async function clearOrder(orderId) {
   }
 
   await loadDailyRevenues();
+  setEditingDailyRevenueId(savedRecord?.id || existingRecord?.id || null);
   setDailyRevenueStatus(existingRecord?.id ? "Bu tarih için kapanış güncellendi." : "Gün sonu kapanışı kaydedildi.");
   setDailyRevenueSaving(false);
 }
@@ -2538,17 +2609,19 @@ async function clearOrder(orderId) {
         </header>
 
         <section className="daily-revenue-layout">
-          <form className="product-form daily-revenue-form" onSubmit={saveDailyRevenue}>
-            <h2>Kapanış Bilgileri</h2>
+          <form className="product-form daily-revenue-form" onSubmit={saveDailyRevenue} ref={dailyRevenueFormRef}>
+            <h2>{editingDailyRevenueId ? "Kapanışı Düzenle" : "Kapanış Bilgileri"}</h2>
 
             <label>
               Tarih
               <input
                 type="date"
                 value={dailyRevenueForm.revenue_date}
-                onChange={event => updateDailyRevenueForm("revenue_date", event.target.value)}
+                onChange={event => loadDailyRevenueForDate(event.target.value)}
               />
             </label>
+
+            {dailyRevenueLoading && <p className="daily-date-loading">Ciro kaydı yükleniyor...</p>}
 
             <div className="form-grid">
               <label>
@@ -2560,6 +2633,7 @@ async function clearOrder(orderId) {
                   value={dailyRevenueForm.cash_amount}
                   onChange={event => updateDailyRevenueForm("cash_amount", event.target.value)}
                   placeholder="0"
+                  disabled={dailyRevenueLoading}
                 />
               </label>
 
@@ -2572,6 +2646,7 @@ async function clearOrder(orderId) {
                   value={dailyRevenueForm.card_amount}
                   onChange={event => updateDailyRevenueForm("card_amount", event.target.value)}
                   placeholder="0"
+                  disabled={dailyRevenueLoading}
                 />
               </label>
             </div>
@@ -2585,6 +2660,7 @@ async function clearOrder(orderId) {
                 value={dailyRevenueForm.other_amount}
                 onChange={event => updateDailyRevenueForm("other_amount", event.target.value)}
                 placeholder="0"
+                disabled={dailyRevenueLoading}
               />
             </label>
 
@@ -2594,6 +2670,7 @@ async function clearOrder(orderId) {
                 value={dailyRevenueForm.note}
                 onChange={event => updateDailyRevenueForm("note", event.target.value)}
                 placeholder="İsteğe bağlı kapanış notu"
+                disabled={dailyRevenueLoading}
               />
             </label>
 
@@ -2605,8 +2682,8 @@ async function clearOrder(orderId) {
             {dailyRevenueStatus && <p className="status">{dailyRevenueStatus}</p>}
 
             <div className="form-actions">
-              <button type="submit" disabled={dailyRevenueSaving}>
-                <Save size={18} /> {dailyRevenueSaving ? "Kaydediliyor" : "Kapanışı Kaydet"}
+              <button type="submit" disabled={dailyRevenueSaving || dailyRevenueLoading}>
+                <Save size={18} /> {dailyRevenueSaving ? "Kaydediliyor" : editingDailyRevenueId ? "Kapanışı Güncelle" : "Kapanışı Kaydet"}
               </button>
               <button type="button" onClick={resetDailyRevenueForm}>Temizle</button>
             </div>
@@ -2632,17 +2709,24 @@ async function clearOrder(orderId) {
                   <span>Diğer</span>
                   <span>Toplam</span>
                   <span>Not</span>
+                  <span>İşlem</span>
                 </div>
               )}
 
               {dailyRevenues.map(record => (
-                <div className="daily-revenue-row" key={record.id}>
+                <div className={`daily-revenue-row ${editingDailyRevenueId === record.id ? "selected" : ""}`} key={record.id}>
                   <span>{parseDateOnly(record.revenue_date).toLocaleDateString("tr-TR")}</span>
                   <span>{formatPrice(record.cash_amount)}</span>
                   <span>{formatPrice(record.card_amount)}</span>
                   <span>{formatPrice(record.other_amount)}</span>
                   <strong>{formatPrice(getDailyRevenueRecordTotal(record))}</strong>
                   <em>{record.note || "-"}</em>
+                  <button
+                    type="button"
+                    onClick={() => loadDailyRevenueForDate(record.revenue_date, { scrollToForm: true })}
+                  >
+                    Aç / Düzenle
+                  </button>
                 </div>
               ))}
             </div>

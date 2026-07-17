@@ -3492,13 +3492,36 @@ button{
 
 .daily-revenue-row{
   display:grid;
-  grid-template-columns:1fr .85fr .85fr .85fr .95fr minmax(120px,1.2fr);
+  grid-template-columns:1fr .8fr .8fr .8fr .9fr minmax(110px,1.1fr) minmax(100px,.7fr);
   gap:10px;
   align-items:center;
   padding:13px 14px;
   border:1px solid var(--line);
   border-radius:15px;
   background:rgba(17,25,35,.74);
+}
+
+.daily-revenue-row.selected{
+  border-color:rgba(255,211,107,.42);
+  background:rgba(255,211,107,.08);
+}
+
+.daily-revenue-row > button{
+  min-height:38px;
+  border:1px solid rgba(255,211,107,.24);
+  border-radius:12px;
+  padding:0 10px;
+  color:#ffd36b;
+  background:rgba(255,211,107,.08);
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+
+.daily-date-loading{
+  margin:-4px 0 4px;
+  color:#c9d4dc;
+  font-size:12px;
 }
 
 .daily-revenue-header{
@@ -3659,13 +3682,15 @@ button{
   }
   .daily-revenue-header{display:none}
   .daily-revenue-row span:first-child,
-  .daily-revenue-row em{
+  .daily-revenue-row em,
+  .daily-revenue-row > button{
     grid-column:1/-1;
   }
   .daily-revenue-row span:nth-child(2)::before{content:"Nakit: ";color:var(--muted);font-weight:800}
   .daily-revenue-row span:nth-child(3)::before{content:"Kart: ";color:var(--muted);font-weight:800}
   .daily-revenue-row span:nth-child(4)::before{content:"Diğer: ";color:var(--muted);font-weight:800}
   .daily-revenue-row strong::before{content:"Toplam: ";color:var(--muted);font-weight:800}
+  .daily-revenue-row > button{width:100%}
   .daily-revenue-button{width:100%}
   .expiry-summary{grid-template-columns:1fr}
   .expiry-list-head{
@@ -3681,7 +3706,7 @@ button{
 @media(min-width:720px) and (max-width:1023px){
   .daily-revenue-layout{grid-template-columns:1fr}
   .daily-revenue-row{
-    grid-template-columns:.9fr .75fr .75fr .75fr .85fr minmax(100px,1fr);
+    grid-template-columns:.9fr .7fr .7fr .7fr .8fr minmax(100px,1fr) minmax(96px,.7fr);
   }
 }
 
