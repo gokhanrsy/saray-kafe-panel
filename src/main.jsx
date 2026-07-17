@@ -1,16 +1,21 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards, Menu, X } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards, Menu, X, Users } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
 const TABLES = [
   "Dış Cam", "Masa 1", "Masa 2", "Masa 3",
   "Orta Masa", "Masa 4", "Balkon", "Bahçe 1",
-  "Bahçe 2", "Bahçe 3", "Dış Masa", "İç Masa", "Gel Al"
+  "Bahçe 2", "Bahçe 3", "Dış Masa", "İç Masa", "Gel Al", "Personel"
 ];
 
 const normalizeTableName = value => value?.trim().toLowerCase();
+
+const isStaffTableName = value => normalizeTableName(value) === "personel";
+
+const isStaffConsumptionOrder = order =>
+  isStaffTableName(order?.table_name) && String(order?.note || "").startsWith("Personel tüketimi");
 
 const formatPrice = value => `${Number(value || 0)} ₺`;
 
@@ -446,6 +451,8 @@ async function clearOrder(orderId) {
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
 
+  const isStaffTable = isStaffTableName(selectedTable);
+
   const cartUnitCount = useMemo(() => {
     return cartItems.reduce((count, item) => {
       return count + (isWeightedCartItem(item) ? 1 : Number(item.quantity || 0));
@@ -480,6 +487,10 @@ async function clearOrder(orderId) {
     }, {});
   }, [openOrders]);
 
+  const customerOpenOrderCount = useMemo(() => {
+    return openOrders.filter(order => !isStaffTableName(order.table_name)).length;
+  }, [openOrders]);
+
   const emptyTransferTargets = useMemo(() => {
     return TABLES.filter(tableName =>
       normalizeTableName(tableName) !== normalizeTableName(selectedTable) &&
@@ -489,7 +500,9 @@ async function clearOrder(orderId) {
 
   const visibleTables = useMemo(() => {
     if (!showOnlyOpenTables) return TABLES;
-    return TABLES.filter(tableName => pendingOrdersByTable[normalizeTableName(tableName)]);
+    return TABLES.filter(tableName =>
+      !isStaffTableName(tableName) && pendingOrdersByTable[normalizeTableName(tableName)]
+    );
   }, [pendingOrdersByTable, showOnlyOpenTables]);
 
   const productCategoriesByName = useMemo(() => {
@@ -1820,6 +1833,12 @@ async function clearOrder(orderId) {
 
   async function saveOrder(markPaid = false, options = {}) {
   const silent = options.silent === true;
+  const staffConsumption = markPaid && isStaffTableName(selectedTable);
+  const finalOrderStatus = markPaid ? (staffConsumption ? "cancelled" : "completed") : "pending";
+  const finalOrderTotal = staffConsumption ? 0 : total;
+  const finalOrderNote = staffConsumption
+    ? ["Personel tüketimi", orderNote.trim()].filter(Boolean).join(" · ")
+    : orderNote.trim();
 
   if (!selectedTable) {
     if (!silent) setStatus("Önce masa ve ürün seç.");
@@ -1833,7 +1852,7 @@ async function clearOrder(orderId) {
 
   if (cartItems.length === 0) {
     if (markPaid) {
-      if (!silent) setStatus("Ödeme almak için önce ürün ekle.");
+      if (!silent) setStatus(staffConsumption ? "Stoktan düşmek için önce ürün ekle." : "Ödeme almak için önce ürün ekle.");
       return;
     }
 
@@ -1899,10 +1918,10 @@ async function clearOrder(orderId) {
       .from("orders")
       .insert({
         table_name: selectedTable,
-        total_price: total,
-        paid: markPaid,
-        status: markPaid ? "completed" : "pending",
-        note: orderNote.trim()
+        total_price: finalOrderTotal,
+        paid: markPaid && !staffConsumption,
+        status: finalOrderStatus,
+        note: finalOrderNote
       })
       .select()
       .single();
@@ -1920,10 +1939,10 @@ async function clearOrder(orderId) {
     const { error: updateError } = await supabase
       .from("orders")
       .update({
-        total_price: total,
-        paid: markPaid,
-        status: markPaid ? "completed" : "pending",
-        note: orderNote.trim()
+        total_price: finalOrderTotal,
+        paid: markPaid && !staffConsumption,
+        status: finalOrderStatus,
+        note: finalOrderNote
       })
       .eq("id", orderId);
 
@@ -2016,7 +2035,7 @@ async function clearOrder(orderId) {
           product_name: item.name,
           movement_type: "sale",
           quantity: -item.quantity,
-          note: `${selectedTable} satışı`
+          note: staffConsumption ? "Personel tüketimi" : `${selectedTable} satışı`
         });
 
       if (movementError) {
@@ -2037,13 +2056,20 @@ async function clearOrder(orderId) {
     setSplitSelections({});
     setMobileCartOpen(false);
 
+    if (staffConsumption) {
+      setSelectedTable(null);
+      setScreen("tables");
+    }
+
     await loadProducts();
   }
 
   if (!silent) {
     setStatus(
       markPaid
-        ? "Ödeme alındı. Sipariş tamamlandı."
+        ? staffConsumption
+          ? "Personel tüketimi stoktan düşüldü. Ciroya eklenmedi."
+          : "Ödeme alındı. Sipariş tamamlandı."
         : "Sipariş kaydedildi."
     );
   }
@@ -2194,7 +2220,7 @@ async function clearOrder(orderId) {
               onClick={() => setShowOnlyOpenTables(prev => !prev)}
             >
               <span>Açık Adisyon</span>
-              <strong>{openOrders.length}</strong>
+              <strong>{customerOpenOrderCount}</strong>
               <small>{showOnlyOpenTables ? "Tüm masaları göster" : "Açık masaları göster"}</small>
             </button>
             <button className="summary-card stock" onClick={() => goToScreen("critical-stock")}>
@@ -2230,7 +2256,10 @@ async function clearOrder(orderId) {
               {visibleTables.map(t => {
                 const pendingOrder = pendingOrdersByTable[normalizeTableName(t)];
                 const isOpen = Boolean(pendingOrder);
-                const emptyClass = t.includes("Paket")
+                const staffTable = isStaffTableName(t);
+                const emptyClass = staffTable
+                  ? "staff"
+                  : t.includes("Paket")
                   ? "purple"
                   : t.includes("Gel")
                     ? "teal"
@@ -2238,14 +2267,14 @@ async function clearOrder(orderId) {
                 const previewItems = pendingOrder?.items || [];
 
                 return (
-                  <button key={t} className={`table-card ${isOpen ? "open" : emptyClass}`} onClick={() => openOrder(t)}>
+                  <button key={t} className={`table-card ${isOpen ? "open" : emptyClass} ${staffTable ? "staff-table" : ""}`} onClick={() => openOrder(t)}>
                     <div className="table-card-top">
-                      <span className="table-icon">{t.includes("Paket") ? <Package /> : t.includes("Gel") ? <ShoppingBag /> : <Coffee />}</span>
-                      <span className="table-state">{isOpen ? "Açık" : "Boş"}</span>
+                      <span className="table-icon">{staffTable ? <Users /> : t.includes("Paket") ? <Package /> : t.includes("Gel") ? <ShoppingBag /> : <Coffee />}</span>
+                      <span className="table-state">{staffTable ? (isOpen ? "Kullanımda" : "Personel") : isOpen ? "Açık" : "Boş"}</span>
                     </div>
                     <div className="table-card-body">
                       <strong>{t}</strong>
-                      <span>{isOpen ? "Açık Hesap" : "Boş Masa"}</span>
+                      <span>{staffTable ? "Ciro dışı stok kullanımı" : isOpen ? "Açık Hesap" : "Boş Masa"}</span>
                     </div>
                     {isOpen && previewItems.length > 0 && (
                       <div className="table-order-preview">
@@ -2259,7 +2288,7 @@ async function clearOrder(orderId) {
                         )}
                       </div>
                     )}
-                    {isOpen && <b className="table-total">{formatPrice(pendingOrder.total_price)}</b>}
+                    {isOpen && <b className="table-total">{staffTable ? "Stok kullanımı" : formatPrice(pendingOrder.total_price)}</b>}
                   </button>
                 );
               })}
@@ -2923,7 +2952,7 @@ async function clearOrder(orderId) {
           )}
 
           {!historyLoading && filteredHistoryOrders.map(order => (
-            <article className={`history-card ${order.status === "cancelled" ? "cancelled" : "completed"}`} key={order.id}>
+            <article className={`history-card ${order.status === "cancelled" ? "cancelled" : "completed"} ${isStaffConsumptionOrder(order) ? "staff-consumption" : ""}`} key={order.id}>
               <div className="history-card-head">
                 <div>
                   <strong>{order.table_name || "Masa yok"}</strong>
@@ -2938,8 +2967,8 @@ async function clearOrder(orderId) {
                   </span>
                 </div>
                 <div>
-                  <em>{order.status}</em>
-                  <b>{formatPrice(order.total_price)}</b>
+                  <em>{isStaffConsumptionOrder(order) ? "personel" : order.status}</em>
+                  <b>{isStaffConsumptionOrder(order) ? "Ciro dışı" : formatPrice(order.total_price)}</b>
                 </div>
               </div>
 
@@ -2967,14 +2996,14 @@ async function clearOrder(orderId) {
   }
 
   return (
-    <div className="app order-layout">
+    <div className={`app order-layout ${isStaffTable ? "staff-order" : ""}`}>
       <header className="order-header">
         <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
         <div>
           <h1>{selectedTable}</h1>
-          <p>{cartUnitCount} ürün</p>
+          <p>{isStaffTable ? `Ciro dışı stok kullanımı · ${cartUnitCount} ürün` : `${cartUnitCount} ürün`}</p>
         </div>
-        <strong>{formatPrice(total)}</strong>
+        <strong>{isStaffTable ? "Ciro dışı" : formatPrice(total)}</strong>
       </header>
 
       <div className="order-filter-panel">
@@ -3089,7 +3118,7 @@ async function clearOrder(orderId) {
         <aside className={`cart ${mobileCartOpen ? "mobile-open" : ""}`}>
           <div className="cart-head">
             <div>
-              <h2>Adisyon</h2>
+              <h2>{isStaffTable ? "Personel Tüketimi" : "Adisyon"}</h2>
               <span>{selectedTable} · {cartUnitCount} ürün</span>
             </div>
             <button className="cart-close" onClick={() => setMobileCartOpen(false)} aria-label="Adisyonu kapat">
@@ -3144,13 +3173,13 @@ async function clearOrder(orderId) {
           )}
 
           <div className="total">
-            <span>Toplam</span>
-            <strong>{formatPrice(total)}</strong>
+            <span>{isStaffTable ? "Stoktan düşülecek" : "Toplam"}</span>
+            <strong>{isStaffTable ? `${cartUnitCount} ürün` : formatPrice(total)}</strong>
           </div>
 
           {status && <p className="status">{status}</p>}
 
-          {isCurrentOrderPending && currentOrderId && (
+          {isCurrentOrderPending && currentOrderId && !isStaffTable && (
             <div className="transfer-panel">
               <button className="transfer" onClick={() => setTransferMode(prev => !prev)}>
                 <ArrowRightLeft size={18} /> Masa Transferi
@@ -3174,7 +3203,7 @@ async function clearOrder(orderId) {
             </div>
           )}
 
-          {isCurrentOrderPending && currentOrderId && (
+          {isCurrentOrderPending && currentOrderId && !isStaffTable && (
             <div className="split-panel">
               <button
                 className="split-toggle"
@@ -3265,19 +3294,20 @@ async function clearOrder(orderId) {
           )}
 
           <button className="pay" onClick={() => saveOrder(true)}>
-            <CreditCard size={18} /> Ödeme Al
+            {isStaffTable ? <Package size={18} /> : <CreditCard size={18} />}
+            {isStaffTable ? "Stoktan Düş" : "Ödeme Al"}
           </button>
         </aside>
       </main>
 
       <div className="mobile-cart-bar">
         <div>
-          <span>Toplam</span>
-          <strong>{formatPrice(total)}</strong>
-          <small>{cartUnitCount} ürün</small>
+          <span>{isStaffTable ? "Personel" : "Toplam"}</span>
+          <strong>{isStaffTable ? `${cartUnitCount} ürün` : formatPrice(total)}</strong>
+          <small>{isStaffTable ? "Ciroya eklenmez" : `${cartUnitCount} ürün`}</small>
         </div>
         <button className="mobile-pay-button" onClick={() => saveOrder(true)}>
-          Ödeme Al
+          {isStaffTable ? "Stoktan Düş" : "Ödeme Al"}
         </button>
         <button className="mobile-detail-button" onClick={toggleMobileCart}>
           {mobileCartOpen ? "Kapat" : "Adisyonu Gör"}

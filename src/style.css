@@ -7784,3 +7784,58 @@ body{
     min-height:50px!important;
   }
 }
+
+/* Staff table: inventory consumption, never sales revenue */
+.app-shell .table-card.staff,
+.app-shell .table-card.staff-table{
+  border-color:rgba(123,151,255,.25);
+  background:linear-gradient(155deg,rgba(56,72,132,.92),rgba(18,25,48,.96));
+}
+
+.app-shell .table-card.staff-table.open{
+  border-color:rgba(132,164,255,.48);
+  background:linear-gradient(155deg,rgba(61,83,154,.96),rgba(20,30,59,.98));
+}
+
+.app-shell .table-card.staff-table .table-icon{
+  color:#d7e0ff;
+  background:rgba(151,174,255,.16);
+}
+
+.app-shell .table-card.staff-table .table-state{
+  color:#e0e6ff;
+  background:rgba(151,174,255,.14);
+}
+
+.app-shell .table-card.staff-table .table-total{
+  color:#cbd7ff;
+  font-size:13px;
+}
+
+.staff-order .order-header,
+.staff-order .order-filter-panel,
+.staff-order .cart{
+  border-color:rgba(132,164,255,.2);
+}
+
+.staff-order .order-header > strong,
+.staff-order .total strong,
+.staff-order .mobile-cart-bar strong{
+  color:#b8c8ff;
+}
+
+.staff-order .pay,
+.staff-order .mobile-pay-button{
+  color:#fff!important;
+  background:linear-gradient(180deg,#607bd8,#4059ad)!important;
+}
+
+.history-card.staff-consumption{
+  border-color:rgba(132,164,255,.28);
+  background:rgba(44,58,108,.18);
+}
+
+.history-card.staff-consumption .history-card-head em,
+.history-card.staff-consumption .history-card-head b{
+  color:#cbd7ff;
+}
