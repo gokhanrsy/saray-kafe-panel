@@ -51,6 +51,13 @@ const formatSmartNumber = value => {
 
 const formatGramValue = value => `${formatSmartNumber(value)} g`;
 
+const WEIGHTED_PORTION_PRICE = 110;
+
+const supportsWeightedPortion = product => {
+  const normalizedName = String(product?.name || "").toLocaleLowerCase("tr-TR");
+  return normalizedName.includes("börek") || normalizedName.includes("borek");
+};
+
 const FAVORITE_ORDER_STORAGE_KEY = "saray-favorite-product-order";
 
 const readFavoriteOrderFromStorage = () => {
@@ -469,8 +476,10 @@ async function clearOrder(orderId) {
 
   const splitSelectedTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
-      const selectedQuantity = getSplitSelectionValue(item);
-      return sum + Number(item.price || 0) * selectedQuantity;
+      const selectedValue = getSplitSelectionValue(item);
+      return sum + (isWeightedCartItem(item)
+        ? selectedValue
+        : Number(item.price || 0) * selectedValue);
     }, 0);
   }, [cartItems, splitSelections]);
 
@@ -1666,17 +1675,8 @@ async function clearOrder(orderId) {
     setWeightedAmount(kgPrice > 0 && grams > 0 ? formatSmartNumber((grams / 1000) * kgPrice) : "");
   }
 
-  function confirmWeightedProduct() {
-    const amount = parseDecimalInput(weightedAmount);
-    const grams = Math.round(parseGramInput(weightedGrams));
-    const kgPrice = Number(weightedProduct?.price || 0);
-
-    if (!weightedProduct || amount <= 0 || grams <= 0 || kgPrice <= 0) {
-      setStatus("Geçerli bir tutar veya gram gir.");
-      return;
-    }
-
-    const cartName = weightedProduct.name;
+  function addWeightedProductToCart(product, amount, grams) {
+    const cartName = product.name;
 
     setCart(prev => {
       const current = prev[cartName];
@@ -1684,9 +1684,9 @@ async function clearOrder(orderId) {
         ...prev,
         [cartName]: {
           product: {
-            ...weightedProduct,
+            ...product,
             unit_type: "weighted",
-            base_name: weightedProduct.name,
+            base_name: product.name,
             grams: current ? Number(current.grams || 0) + grams : grams
           },
           name: cartName,
@@ -1701,6 +1701,31 @@ async function clearOrder(orderId) {
     setWeightedAmount("");
     setWeightedGrams("");
     setAutoSaveVersion(version => version + 1);
+  }
+
+  function confirmWeightedProduct() {
+    const amount = parseDecimalInput(weightedAmount);
+    const grams = Math.round(parseGramInput(weightedGrams));
+    const kgPrice = Number(weightedProduct?.price || 0);
+
+    if (!weightedProduct || amount <= 0 || grams <= 0 || kgPrice <= 0) {
+      setStatus("Geçerli bir tutar veya gram gir.");
+      return;
+    }
+
+    addWeightedProductToCart(weightedProduct, amount, grams);
+  }
+
+  function addWeightedPortion() {
+    const kgPrice = Number(weightedProduct?.price || 0);
+
+    if (!weightedProduct || kgPrice <= 0) {
+      setStatus("Porsiyon hesabı için geçerli kg fiyatı bulunamadı.");
+      return;
+    }
+
+    const grams = Math.round((WEIGHTED_PORTION_PRICE / kgPrice) * 1000);
+    addWeightedProductToCart(weightedProduct, WEIGHTED_PORTION_PRICE, grams);
   }
 
   async function transferOrder(targetTable) {
@@ -1756,14 +1781,72 @@ async function clearOrder(orderId) {
   setScreen("tables");
 }
 
-  function setSplitItemQuantity(item, quantity) {
-  const safeQuantity = Math.max(0, Math.min(Math.floor(Number(quantity || 0)), Number(item.quantity || 0)));
+  function getWeightedLineTotals(item) {
+    return {
+      amount: Number(item.price || 0) * Number(item.quantity || 0),
+      grams: Number(item.grams || 0) * Number(item.quantity || 0)
+    };
+  }
 
-  setSplitSelections(prev => ({
-    ...prev,
-    [item.name]: safeQuantity
-  }));
-}
+  function getSplitWeightedSelection(item) {
+    const selection = splitSelections[item.name];
+
+    if (!selection || typeof selection !== "object") {
+      return { amount: 0, grams: 0, amountInput: "", gramsInput: "" };
+    }
+
+    return {
+      amount: Number(selection.amount || 0),
+      grams: Number(selection.grams || 0),
+      amountInput: selection.amountInput ?? "",
+      gramsInput: selection.gramsInput ?? ""
+    };
+  }
+
+  function setSplitItemQuantity(item, quantity) {
+    const safeQuantity = Math.max(0, Math.min(Math.floor(Number(quantity || 0)), Number(item.quantity || 0)));
+
+    setSplitSelections(prev => ({
+      ...prev,
+      [item.name]: safeQuantity
+    }));
+  }
+
+  function updateSplitWeightedAmount(item, value) {
+    const totals = getWeightedLineTotals(item);
+    const parsedAmount = parseDecimalInput(value);
+    const amount = Math.max(0, Math.min(parsedAmount, totals.amount));
+    const grams = totals.amount > 0 ? (amount / totals.amount) * totals.grams : 0;
+    const amountInput = parsedAmount > totals.amount ? formatSmartNumber(totals.amount) : value;
+
+    setSplitSelections(prev => ({
+      ...prev,
+      [item.name]: {
+        amount,
+        grams,
+        amountInput,
+        gramsInput: amount > 0 ? formatSmartNumber(grams) : ""
+      }
+    }));
+  }
+
+  function updateSplitWeightedGrams(item, value) {
+    const totals = getWeightedLineTotals(item);
+    const parsedGrams = parseGramInput(value);
+    const grams = Math.max(0, Math.min(parsedGrams, totals.grams));
+    const amount = totals.grams > 0 ? (grams / totals.grams) * totals.amount : 0;
+    const gramsInput = parsedGrams > totals.grams ? formatSmartNumber(totals.grams) : value;
+
+    setSplitSelections(prev => ({
+      ...prev,
+      [item.name]: {
+        amount,
+        grams,
+        amountInput: grams > 0 ? formatSmartNumber(amount) : "",
+        gramsInput
+      }
+    }));
+  }
 
   function addSplitItemQuantity(item) {
   const currentQuantity = getSplitSelectionValue(item);
@@ -1771,8 +1854,16 @@ async function clearOrder(orderId) {
 }
 
   function resetSplitItemQuantity(item) {
-  setSplitItemQuantity(item, 0);
-}
+    if (isWeightedCartItem(item)) {
+      setSplitSelections(prev => ({
+        ...prev,
+        [item.name]: { amount: 0, grams: 0, amountInput: "", gramsInput: "" }
+      }));
+      return;
+    }
+
+    setSplitItemQuantity(item, 0);
+  }
 
   function resetAllSplitSelections() {
   setSplitSelections({});
@@ -1783,9 +1874,10 @@ async function clearOrder(orderId) {
 }
 
   function getSplitSelectionValue(item) {
-  if (hasSplitSelection(item)) return Number(splitSelections[item.name] || 0);
-  return 0;
-}
+    if (!hasSplitSelection(item)) return 0;
+    if (isWeightedCartItem(item)) return getSplitWeightedSelection(item).amount;
+    return Number(splitSelections[item.name] || 0);
+  }
 
 
   async function paySelectedSplitItems() {
@@ -1797,14 +1889,27 @@ async function clearOrder(orderId) {
   }
 
   const selectedItems = cartItems
-    .map(item => ({
-      product_name: item.name,
-      quantity: Math.min(
-        Math.floor(getSplitSelectionValue(item)),
-        Number(item.quantity || 0)
-      )
-    }))
-    .filter(item => item.quantity > 0);
+    .map(item => {
+      if (isWeightedCartItem(item)) {
+        const selection = getSplitWeightedSelection(item);
+        return {
+          product_name: item.name,
+          quantity: 1,
+          weighted: true,
+          amount: Number(selection.amount.toFixed(2)),
+          grams: Number(selection.grams.toFixed(2))
+        };
+      }
+
+      return {
+        product_name: item.name,
+        quantity: Math.min(
+          Math.floor(getSplitSelectionValue(item)),
+          Number(item.quantity || 0)
+        )
+      };
+    })
+    .filter(item => item.weighted ? item.amount > 0 : item.quantity > 0);
 
   if (selectedItems.length === 0) {
     setStatus("Ödeme için en az bir ürün seç.");
@@ -3305,7 +3410,7 @@ async function clearOrder(orderId) {
                   <div className="split-selection-head">
                     <div>
                       <strong>Ödenecek ürünleri seç</strong>
-                      <span>Seçim 0'dan başlar. Her dokunuşta 1 adet eklenir.</span>
+                      <span>Adetli ürünlerde + kullan; kiloluk ürünlerde ödenecek gramı veya tutarı gir.</span>
                     </div>
                     <button
                       type="button"
@@ -3318,43 +3423,89 @@ async function clearOrder(orderId) {
 
                   <div className="item-split">
                     {cartItems.map(item => {
-                      const selectedQuantity = getSplitSelectionValue(item);
+                      const weighted = isWeightedCartItem(item);
+                      const selectedValue = getSplitSelectionValue(item);
+                      const weightedSelection = weighted ? getSplitWeightedSelection(item) : null;
                       const orderedQuantity = Number(item.quantity || 0);
 
                       return (
-                        <div className={`split-line ${selectedQuantity > 0 ? "selected" : ""}`} key={item.name}>
+                        <div className={`split-line ${selectedValue > 0 ? "selected" : ""}`} key={item.name}>
                           <div>
                             <strong>{item.name}</strong>
                             <span>
-                              {isWeightedCartItem(item)
+                              {weighted
                                 ? `${formatGramValue(Number(item.grams || 0) * item.quantity)} · ${formatPrice(item.price * item.quantity)}`
                                 : `${orderedQuantity} adet · ${formatPrice(item.price)}`}
                             </span>
                           </div>
 
-                          <div className="split-add-control">
-                            <div>
-                              <span>Ödenecek</span>
-                              <strong>{selectedQuantity} / {orderedQuantity}</strong>
+                          {weighted ? (
+                            <div className="split-weighted-payment">
+                              <div className="split-weighted-inputs">
+                                <label>
+                                  Ödenecek gram
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={weightedSelection.gramsInput}
+                                    onChange={event => updateSplitWeightedGrams(item, event.target.value)}
+                                    placeholder="0"
+                                    disabled={splitPaymentSaving}
+                                  />
+                                </label>
+                                <label>
+                                  Ödenecek TL
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={weightedSelection.amountInput}
+                                    onChange={event => updateSplitWeightedAmount(item, event.target.value)}
+                                    placeholder="0"
+                                    disabled={splitPaymentSaving}
+                                  />
+                                </label>
+                              </div>
+                              <div className="split-weighted-summary">
+                                <span>
+                                  {weightedSelection.amount > 0
+                                    ? `${formatGramValue(weightedSelection.grams)} · ${formatPrice(weightedSelection.amount)}`
+                                    : "Ödeme seçilmedi"}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="split-reset-button"
+                                  onClick={() => resetSplitItemQuantity(item)}
+                                  disabled={selectedValue <= 0 || splitPaymentSaving}
+                                >
+                                  Sıfırla
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              type="button"
-                              className="split-add-button"
-                              onClick={() => addSplitItemQuantity(item)}
-                              disabled={selectedQuantity >= orderedQuantity || splitPaymentSaving}
-                              aria-label={`${item.name} ödeme seçimine ekle`}
-                            >
-                              +
-                            </button>
-                            <button
-                              type="button"
-                              className="split-reset-button"
-                              onClick={() => resetSplitItemQuantity(item)}
-                              disabled={selectedQuantity <= 0 || splitPaymentSaving}
-                            >
-                              Sıfırla
-                            </button>
-                          </div>
+                          ) : (
+                            <div className="split-add-control">
+                              <div>
+                                <span>Ödenecek</span>
+                                <strong>{selectedValue} / {orderedQuantity}</strong>
+                              </div>
+                              <button
+                                type="button"
+                                className="split-add-button"
+                                onClick={() => addSplitItemQuantity(item)}
+                                disabled={selectedValue >= orderedQuantity || splitPaymentSaving}
+                                aria-label={`${item.name} ödeme seçimine ekle`}
+                              >
+                                +
+                              </button>
+                              <button
+                                type="button"
+                                className="split-reset-button"
+                                onClick={() => resetSplitItemQuantity(item)}
+                                disabled={selectedValue <= 0 || splitPaymentSaving}
+                              >
+                                Sıfırla
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -3436,6 +3587,20 @@ async function clearOrder(orderId) {
             <small className="weighted-hint">
               {formatPrice(weightedProduct.price)}/kg üzerinden hesaplanır
             </small>
+
+            {supportsWeightedPortion(weightedProduct) && (
+              <button
+                type="button"
+                className="weighted-portion-button"
+                onClick={addWeightedPortion}
+              >
+                <span>1 Porsiyon</span>
+                <strong>{formatPrice(WEIGHTED_PORTION_PRICE)}</strong>
+                <small>
+                  Yaklaşık {formatGramValue(Math.round((WEIGHTED_PORTION_PRICE / Number(weightedProduct.price || 1)) * 1000))}
+                </small>
+              </button>
+            )}
 
             <div className="weighted-actions">
               <button onClick={() => {
