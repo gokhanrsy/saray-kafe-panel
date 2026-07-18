@@ -201,6 +201,7 @@ function App() {
   const [editingExpiryId, setEditingExpiryId] = useState(null);
   const [expiryStatus, setExpiryStatus] = useState("");
   const [expirySaving, setExpirySaving] = useState(false);
+  const [deletingExpiryId, setDeletingExpiryId] = useState(null);
   const [showInactiveExpiryItems, setShowInactiveExpiryItems] = useState(false);
   const [dailyRevenueForm, setDailyRevenueForm] = useState(() => createDailyRevenueForm(getDateInputValue(new Date())));
   const [dailyRevenues, setDailyRevenues] = useState([]);
@@ -1128,9 +1129,12 @@ async function clearOrder(orderId) {
 }
 
   async function deleteExpiryItem(item) {
+  if (deletingExpiryId) return;
+
   const confirmed = window.confirm(`${item.product_name} SKT kaydı tamamen silinsin mi?`);
   if (!confirmed) return;
 
+  setDeletingExpiryId(item.id);
   setExpiryStatus("Siliniyor...");
   const { error } = await supabase
     .from("expiry_items")
@@ -1139,7 +1143,8 @@ async function clearOrder(orderId) {
 
   if (error) {
     console.error("Expiry item could not be deleted", error);
-    setExpiryStatus("SKT kaydı silinemedi.");
+    setExpiryStatus(`SKT kaydı silinemedi: ${error.message || "Supabase delete policy ayarını kontrol edin."}`);
+    setDeletingExpiryId(null);
     return;
   }
 
@@ -1148,8 +1153,10 @@ async function clearOrder(orderId) {
     setExpiryForm(emptyExpiryForm);
   }
 
+  setExpiryItems(prevItems => prevItems.filter(prevItem => prevItem.id !== item.id));
   await loadExpiryItems();
   setExpiryStatus("SKT kaydı silindi.");
+  setDeletingExpiryId(null);
 }
 
   function resetProductForm() {
@@ -2963,12 +2970,17 @@ async function clearOrder(orderId) {
                   </div>
                   {item.note && <p>{item.note}</p>}
                   <div className="product-row-actions">
-                    <button onClick={() => editExpiryItem(item)}>Düzenle</button>
-                    <button onClick={() => toggleExpiryActive(item)}>
+                    <button type="button" onClick={() => editExpiryItem(item)}>Düzenle</button>
+                    <button type="button" onClick={() => toggleExpiryActive(item)}>
                       {isExpiryItemInactive(item) ? "Aktif Yap" : "Pasif Yap"}
                     </button>
-                    <button className="danger" onClick={() => deleteExpiryItem(item)}>
-                      Sil
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => deleteExpiryItem(item)}
+                      disabled={deletingExpiryId === item.id}
+                    >
+                      {deletingExpiryId === item.id ? "Siliniyor" : "Sil"}
                     </button>
                   </div>
                 </article>
