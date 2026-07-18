@@ -3429,7 +3429,10 @@ async function clearOrder(orderId) {
                       const orderedQuantity = Number(item.quantity || 0);
 
                       return (
-                        <div className={`split-line ${selectedValue > 0 ? "selected" : ""}`} key={item.name}>
+                        <div
+                          className={`split-line ${weighted ? "weighted" : ""} ${selectedValue > 0 ? "selected" : ""}`}
+                          key={item.name}
+                        >
                           <div>
                             <strong>{item.name}</strong>
                             <span>
