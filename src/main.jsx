@@ -1136,14 +1136,16 @@ async function clearOrder(orderId) {
 
   setDeletingExpiryId(item.id);
   setExpiryStatus("Siliniyor...");
-  const { error } = await supabase
+  const { data: deletedItem, error } = await supabase
     .from("expiry_items")
     .delete()
-    .eq("id", item.id);
+    .eq("id", item.id)
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !deletedItem) {
     console.error("Expiry item could not be deleted", error);
-    setExpiryStatus(`SKT kaydı silinemedi: ${error.message || "Supabase delete policy ayarını kontrol edin."}`);
+    setExpiryStatus(`SKT kaydı silinemedi: ${error?.message || "Kayıt silme yetkisi/policy ayarını kontrol edin."}`);
     setDeletingExpiryId(null);
     return;
   }
