@@ -6202,19 +6202,76 @@ body,
 
 .supplier-debt-layout{
   display:grid;
-  grid-template-columns:minmax(340px,440px) minmax(0,1fr);
+  grid-template-columns:1fr;
   gap:18px;
   align-items:start;
 }
 
 .supplier-debt-forms{
   display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
   gap:14px;
+  align-items:start;
 }
 
 .supplier-debt-form,
 .supplier-payment-form{
   position:static;
+}
+
+.supplier-manager-card{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:minmax(180px,1fr) minmax(220px,360px) auto;
+  gap:10px;
+  align-items:center;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:20px;
+  padding:14px;
+  background:rgba(23,29,34,.94);
+  box-shadow:0 14px 34px rgba(0,0,0,.2);
+}
+
+.supplier-manager-card h2{
+  margin:0;
+  font-size:20px;
+}
+
+.supplier-manager-card p{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.supplier-manager-card input{
+  width:100%;
+  min-height:44px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  outline:0;
+  color:var(--text);
+  background:var(--panel2);
+  padding:0 12px;
+}
+
+.supplier-manager-card input:focus{
+  border-color:rgba(243,154,34,.75);
+  box-shadow:0 0 0 3px rgba(243,154,34,.12);
+}
+
+.supplier-manager-card button{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  border:0;
+  border-radius:14px;
+  padding:0 14px;
+  color:#111;
+  background:var(--gold);
+  font-weight:950;
+  white-space:nowrap;
 }
 
 .supplier-debt-form textarea,
@@ -6474,10 +6531,6 @@ body,
 }
 
 @media(max-width:1180px){
-  .supplier-debt-layout{
-    grid-template-columns:1fr;
-  }
-
   .supplier-item-row{
     grid-template-columns:minmax(0,1fr) minmax(76px,.4fr) minmax(78px,.4fr) minmax(94px,.5fr) minmax(78px,.45fr) 42px;
   }
@@ -6485,6 +6538,11 @@ body,
 
 @media(max-width:760px){
   .supplier-debt-summary{
+    grid-template-columns:1fr;
+  }
+
+  .supplier-debt-forms,
+  .supplier-manager-card{
     grid-template-columns:1fr;
   }
 

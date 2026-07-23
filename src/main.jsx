@@ -232,10 +232,13 @@ function App() {
   const [editingDailyRevenueId, setEditingDailyRevenueId] = useState(null);
   const [supplierDebts, setSupplierDebts] = useState([]);
   const [supplierDebtPayments, setSupplierDebtPayments] = useState([]);
+  const [supplierDebtSuppliers, setSupplierDebtSuppliers] = useState([]);
+  const [supplierNameForm, setSupplierNameForm] = useState("");
   const [supplierDebtForm, setSupplierDebtForm] = useState(() => createSupplierDebtForm(getDateInputValue(new Date())));
   const [supplierPaymentForm, setSupplierPaymentForm] = useState(() => createSupplierPaymentForm(getDateInputValue(new Date())));
   const [supplierDebtStatus, setSupplierDebtStatus] = useState("");
   const [supplierDebtSaving, setSupplierDebtSaving] = useState(false);
+  const [supplierSaving, setSupplierSaving] = useState(false);
   const [supplierPaymentSaving, setSupplierPaymentSaving] = useState(false);
   const [deletingSupplierDebtId, setDeletingSupplierDebtId] = useState(null);
   const [deletingSupplierPaymentId, setDeletingSupplierPaymentId] = useState(null);
@@ -629,6 +632,22 @@ async function clearOrder(orderId) {
   const supplierDebtBalance = useMemo(() => {
     return Math.max(0, supplierDebtInvoiceTotal - supplierDebtPaymentTotal);
   }, [supplierDebtInvoiceTotal, supplierDebtPaymentTotal]);
+
+  const supplierDebtSupplierNames = useMemo(() => {
+    const names = new Set([SUPPLIER_DEBT_DEFAULT_SUPPLIER]);
+
+    supplierDebtSuppliers.forEach(supplier => {
+      if (supplier.name) names.add(supplier.name);
+    });
+    supplierDebts.forEach(debt => {
+      if (debt.supplier_name) names.add(debt.supplier_name);
+    });
+    supplierDebtPayments.forEach(payment => {
+      if (payment.supplier_name) names.add(payment.supplier_name);
+    });
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "tr"));
+  }, [supplierDebtSuppliers, supplierDebts, supplierDebtPayments]);
 
   const stockEntryProducts = useMemo(() => {
     const normalizedSearch = stockSearchTerm.trim().toLowerCase();
@@ -1079,6 +1098,18 @@ async function clearOrder(orderId) {
 }
 
   async function loadSupplierDebtData() {
+  const { data: suppliers, error: suppliersError } = await supabase
+    .from("supplier_debt_suppliers")
+    .select("*")
+    .order("name", { ascending: true });
+
+  if (suppliersError) {
+    console.error("Supplier list could not be loaded", suppliersError);
+    setSupplierDebtStatus("Tedarikçi listesi alınamadı. Güncel Supabase SQL dosyasını tekrar çalıştırın.");
+  } else {
+    setSupplierDebtSuppliers(suppliers || []);
+  }
+
   const { data: debts, error: debtsError } = await supabase
     .from("supplier_debts")
     .select("*")
@@ -1134,6 +1165,37 @@ async function clearOrder(orderId) {
     items: itemsByDebtId[debt.id] || []
   })));
   setSupplierDebtPayments(payments || []);
+}
+
+  async function saveSupplierDebtSupplier(event) {
+  event.preventDefault();
+  const supplierName = supplierNameForm.trim();
+
+  if (!supplierName) {
+    setSupplierDebtStatus("Tedarikçi adı yazın.");
+    return;
+  }
+
+  setSupplierSaving(true);
+  setSupplierDebtStatus("Tedarikçi kaydediliyor...");
+
+  const { error } = await supabase
+    .from("supplier_debt_suppliers")
+    .upsert({ name: supplierName }, { onConflict: "name" });
+
+  if (error) {
+    console.error("Supplier could not be saved", error);
+    setSupplierDebtStatus(`Tedarikçi kaydedilemedi: ${error.message || "Supabase SQL dosyasını tekrar çalıştırın."}`);
+    setSupplierSaving(false);
+    return;
+  }
+
+  await loadSupplierDebtData();
+  setSupplierDebtForm(prev => ({ ...prev, supplier_name: supplierName }));
+  setSupplierPaymentForm(prev => ({ ...prev, supplier_name: supplierName }));
+  setSupplierNameForm("");
+  setSupplierDebtStatus("Tedarikçi kaydedildi.");
+  setSupplierSaving(false);
 }
 
   function openSupplierDebtScreen() {
@@ -3206,16 +3268,34 @@ async function clearOrder(orderId) {
 
         <section className="supplier-debt-layout">
           <div className="supplier-debt-forms">
+            <form className="supplier-manager-card" onSubmit={saveSupplierDebtSupplier}>
+              <div>
+                <h2>Tedarikçiler</h2>
+                <p>{supplierDebtSupplierNames.length} tedarikçi kayıtlı</p>
+              </div>
+              <input
+                value={supplierNameForm}
+                onChange={event => setSupplierNameForm(event.target.value)}
+                placeholder="Yeni tedarikçi adı"
+              />
+              <button type="submit" disabled={supplierSaving}>
+                <Plus size={17} /> {supplierSaving ? "Ekleniyor" : "Ekle"}
+              </button>
+            </form>
+
             <form className="product-form supplier-debt-form" onSubmit={saveSupplierDebt} ref={supplierDebtFormRef}>
               <h2>Yeni Borç</h2>
 
               <label>
                 Tedarikçi
-                <input
+                <select
                   value={supplierDebtForm.supplier_name}
                   onChange={event => updateSupplierDebtForm("supplier_name", event.target.value)}
-                  placeholder="Saray Börekçisi"
-                />
+                >
+                  {supplierDebtSupplierNames.map(name => (
+                    <option value={name} key={name}>{name}</option>
+                  ))}
+                </select>
               </label>
 
               <label>
@@ -3344,11 +3424,14 @@ async function clearOrder(orderId) {
 
               <label>
                 Tedarikçi
-                <input
+                <select
                   value={supplierPaymentForm.supplier_name}
                   onChange={event => setSupplierPaymentForm(prev => ({ ...prev, supplier_name: event.target.value }))}
-                  placeholder="Saray Börekçisi"
-                />
+                >
+                  {supplierDebtSupplierNames.map(name => (
+                    <option value={name} key={name}>{name}</option>
+                  ))}
+                </select>
               </label>
 
               <div className="form-grid">

@@ -1,3 +1,14 @@
+create table if not exists public.supplier_debt_suppliers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+insert into public.supplier_debt_suppliers (name)
+values ('Saray Börekçisi')
+on conflict (name) do nothing;
+
 create table if not exists public.supplier_debts (
   id uuid primary key default gen_random_uuid(),
   supplier_name text not null default 'Saray Börekçisi',
@@ -65,9 +76,26 @@ create index if not exists supplier_debt_items_debt_id_idx
 create index if not exists supplier_debt_payments_payment_date_idx
   on public.supplier_debt_payments (payment_date desc, created_at desc);
 
+alter table public.supplier_debt_suppliers enable row level security;
 alter table public.supplier_debts enable row level security;
 alter table public.supplier_debt_items enable row level security;
 alter table public.supplier_debt_payments enable row level security;
+
+drop policy if exists "panel users can read supplier debt suppliers" on public.supplier_debt_suppliers;
+create policy "panel users can read supplier debt suppliers"
+  on public.supplier_debt_suppliers for select to anon, authenticated using (true);
+
+drop policy if exists "panel users can insert supplier debt suppliers" on public.supplier_debt_suppliers;
+create policy "panel users can insert supplier debt suppliers"
+  on public.supplier_debt_suppliers for insert to anon, authenticated with check (true);
+
+drop policy if exists "panel users can update supplier debt suppliers" on public.supplier_debt_suppliers;
+create policy "panel users can update supplier debt suppliers"
+  on public.supplier_debt_suppliers for update to anon, authenticated using (true) with check (true);
+
+drop policy if exists "panel users can delete supplier debt suppliers" on public.supplier_debt_suppliers;
+create policy "panel users can delete supplier debt suppliers"
+  on public.supplier_debt_suppliers for delete to anon, authenticated using (true);
 
 drop policy if exists "panel users can read supplier debts" on public.supplier_debts;
 create policy "panel users can read supplier debts"
