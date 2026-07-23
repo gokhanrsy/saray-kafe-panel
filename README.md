@@ -1,5 +1,9 @@
 # Saray Kafe POS Panel
 
+## Borç takip kurulumu
+
+`supabase/supplier_debts.sql` dosyasını Supabase SQL Editor'da çalıştırın. Paneldeki `Borç Takip` ekranı Saray Börekçisi faturalarını tarih tarih kaydeder, ürün kalemlerinden toplam borcu hesaplar ve girilen ödemeleri toplam borçtan düşer.
+
 Kafe için masa, paket, gel-al, ürün, stok, rapor ve son kullanma tarihi yönetim paneli.
 
 ## Kurulum

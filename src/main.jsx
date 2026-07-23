@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards, Menu, X, Users } from "lucide-react";
+import { Coffee, ShoppingBag, Package, ArrowLeft, CreditCard, Save, Search, ClipboardList, ArrowRightLeft, BarChart3, Boxes, Star, CalendarClock, AlertTriangle, WalletCards, Menu, X, Users, ReceiptText, Banknote, Plus, Trash2 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import "./style.css";
 
@@ -102,6 +102,26 @@ const createDailyRevenueForm = dateValue => ({
   note: ""
 });
 
+const SUPPLIER_DEBT_DEFAULT_SUPPLIER = "Saray Börekçisi";
+
+const createSupplierDebtForm = dateValue => ({
+  supplier_name: SUPPLIER_DEBT_DEFAULT_SUPPLIER,
+  invoice_date: dateValue,
+  entry_type: "items",
+  total_amount: "",
+  description: "",
+  items: [
+    { product_name: "", quantity: "", unit: "adet", unit_price: "" }
+  ]
+});
+
+const createSupplierPaymentForm = dateValue => ({
+  supplier_name: SUPPLIER_DEBT_DEFAULT_SUPPLIER,
+  payment_date: dateValue,
+  amount: "",
+  note: ""
+});
+
 const parseDateOnly = value => {
   const [year, month, day] = String(value || "").split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -168,6 +188,7 @@ function App() {
   const productFormRef = useRef(null);
   const dailyRevenueFormRef = useRef(null);
   const dailyRevenueRequestRef = useRef(0);
+  const supplierDebtFormRef = useRef(null);
   const [reportDate, setReportDate] = useState(() => getDateInputValue(new Date()));
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -209,6 +230,15 @@ function App() {
   const [dailyRevenueSaving, setDailyRevenueSaving] = useState(false);
   const [dailyRevenueLoading, setDailyRevenueLoading] = useState(false);
   const [editingDailyRevenueId, setEditingDailyRevenueId] = useState(null);
+  const [supplierDebts, setSupplierDebts] = useState([]);
+  const [supplierDebtPayments, setSupplierDebtPayments] = useState([]);
+  const [supplierDebtForm, setSupplierDebtForm] = useState(() => createSupplierDebtForm(getDateInputValue(new Date())));
+  const [supplierPaymentForm, setSupplierPaymentForm] = useState(() => createSupplierPaymentForm(getDateInputValue(new Date())));
+  const [supplierDebtStatus, setSupplierDebtStatus] = useState("");
+  const [supplierDebtSaving, setSupplierDebtSaving] = useState(false);
+  const [supplierPaymentSaving, setSupplierPaymentSaving] = useState(false);
+  const [deletingSupplierDebtId, setDeletingSupplierDebtId] = useState(null);
+  const [deletingSupplierPaymentId, setDeletingSupplierPaymentId] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showOnlyOpenTables, setShowOnlyOpenTables] = useState(false);
   const [favoriteOrderMode, setFavoriteOrderMode] = useState(false);
@@ -250,6 +280,7 @@ function App() {
   loadOpenOrders();
   loadExpiryItems();
   loadDailyRevenues();
+  loadSupplierDebtData();
 }, []);
 
   useEffect(() => {
@@ -580,6 +611,24 @@ async function clearOrder(orderId) {
       0
     );
   }, [dailyRevenueForm]);
+
+  const supplierDebtItemsTotal = useMemo(() => {
+    return supplierDebtForm.items.reduce((sum, item) => {
+      return sum + (parseDecimalInput(item.quantity) * parseDecimalInput(item.unit_price));
+    }, 0);
+  }, [supplierDebtForm.items]);
+
+  const supplierDebtInvoiceTotal = useMemo(() => {
+    return supplierDebts.reduce((sum, debt) => sum + Number(debt.total_amount || 0), 0);
+  }, [supplierDebts]);
+
+  const supplierDebtPaymentTotal = useMemo(() => {
+    return supplierDebtPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  }, [supplierDebtPayments]);
+
+  const supplierDebtBalance = useMemo(() => {
+    return Math.max(0, supplierDebtInvoiceTotal - supplierDebtPaymentTotal);
+  }, [supplierDebtInvoiceTotal, supplierDebtPaymentTotal]);
 
   const stockEntryProducts = useMemo(() => {
     const normalizedSearch = stockSearchTerm.trim().toLowerCase();
@@ -1027,6 +1076,276 @@ async function clearOrder(orderId) {
   setEditingDailyRevenueId(savedRecord?.id || existingRecord?.id || null);
   setDailyRevenueStatus(existingRecord?.id ? "Bu tarih için kapanış güncellendi." : "Gün sonu kapanışı kaydedildi.");
   setDailyRevenueSaving(false);
+}
+
+  async function loadSupplierDebtData() {
+  const { data: debts, error: debtsError } = await supabase
+    .from("supplier_debts")
+    .select("*")
+    .order("invoice_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (debtsError) {
+    console.error("Supplier debts could not be loaded", debtsError);
+    setSupplierDebtStatus("Borç kayıtları alınamadı. Supabase SQL kurulumunu kontrol edin.");
+    setSupplierDebts([]);
+    setSupplierDebtPayments([]);
+    return;
+  }
+
+  const debtRows = debts || [];
+  const debtIds = debtRows.map(debt => debt.id).filter(Boolean);
+  let items = [];
+
+  if (debtIds.length > 0) {
+    const { data: itemRows, error: itemsError } = await supabase
+      .from("supplier_debt_items")
+      .select("*")
+      .in("debt_id", debtIds)
+      .order("created_at", { ascending: true });
+
+    if (itemsError) {
+      console.error("Supplier debt items could not be loaded", itemsError);
+      setSupplierDebtStatus("Borç ürün kalemleri alınamadı.");
+    } else {
+      items = itemRows || [];
+    }
+  }
+
+  const { data: payments, error: paymentsError } = await supabase
+    .from("supplier_debt_payments")
+    .select("*")
+    .order("payment_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (paymentsError) {
+    console.error("Supplier debt payments could not be loaded", paymentsError);
+    setSupplierDebtStatus("Ödeme kayıtları alınamadı.");
+  }
+
+  const itemsByDebtId = items.reduce((groupedItems, item) => {
+    groupedItems[item.debt_id] = groupedItems[item.debt_id] || [];
+    groupedItems[item.debt_id].push(item);
+    return groupedItems;
+  }, {});
+
+  setSupplierDebts(debtRows.map(debt => ({
+    ...debt,
+    items: itemsByDebtId[debt.id] || []
+  })));
+  setSupplierDebtPayments(payments || []);
+}
+
+  function openSupplierDebtScreen() {
+  setMobileNavOpen(false);
+  setScreen("supplier-debts");
+  loadSupplierDebtData();
+}
+
+  function updateSupplierDebtForm(field, value) {
+  setSupplierDebtForm(prev => ({ ...prev, [field]: value }));
+  setSupplierDebtStatus("");
+}
+
+  function updateSupplierDebtItem(index, field, value) {
+  setSupplierDebtForm(prev => ({
+    ...prev,
+    items: prev.items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, [field]: value } : item
+    )
+  }));
+  setSupplierDebtStatus("");
+}
+
+  function addSupplierDebtItem() {
+  setSupplierDebtForm(prev => ({
+    ...prev,
+    items: [...prev.items, { product_name: "", quantity: "", unit: "adet", unit_price: "" }]
+  }));
+}
+
+  function removeSupplierDebtItem(index) {
+  setSupplierDebtForm(prev => ({
+    ...prev,
+    items: prev.items.length <= 1
+      ? [{ product_name: "", quantity: "", unit: "adet", unit_price: "" }]
+      : prev.items.filter((_, itemIndex) => itemIndex !== index)
+  }));
+}
+
+  function resetSupplierDebtForm() {
+  setSupplierDebtForm(createSupplierDebtForm(getDateInputValue(new Date())));
+  setSupplierDebtStatus("");
+}
+
+  function resetSupplierPaymentForm() {
+  setSupplierPaymentForm(createSupplierPaymentForm(getDateInputValue(new Date())));
+  setSupplierDebtStatus("");
+}
+
+  async function saveSupplierDebt(event) {
+  event.preventDefault();
+
+  const supplierName = supplierDebtForm.supplier_name.trim() || SUPPLIER_DEBT_DEFAULT_SUPPLIER;
+  const isItemEntry = supplierDebtForm.entry_type === "items";
+  const cleanItems = supplierDebtForm.items
+    .map(item => {
+      const quantity = parseDecimalInput(item.quantity);
+      const unitPrice = parseDecimalInput(item.unit_price);
+      return {
+        product_name: item.product_name.trim(),
+        quantity,
+        unit: item.unit || "adet",
+        unit_price: unitPrice,
+        total_price: quantity * unitPrice
+      };
+    })
+    .filter(item => item.product_name && item.quantity > 0 && item.unit_price >= 0);
+  const totalAmount = isItemEntry ? supplierDebtItemsTotal : parseDecimalInput(supplierDebtForm.total_amount);
+
+  if (!supplierDebtForm.invoice_date) {
+    setSupplierDebtStatus("Fatura tarihi seçmek zorunlu.");
+    return;
+  }
+
+  if (isItemEntry && cleanItems.length === 0) {
+    setSupplierDebtStatus("En az bir ürün kalemi girin.");
+    return;
+  }
+
+  if (totalAmount <= 0) {
+    setSupplierDebtStatus("Borç tutarı 0'dan büyük olmalı.");
+    return;
+  }
+
+  setSupplierDebtSaving(true);
+  setSupplierDebtStatus("Borç kaydediliyor...");
+
+  const { data: savedDebt, error: debtError } = await supabase
+    .from("supplier_debts")
+    .insert({
+      supplier_name: supplierName,
+      invoice_date: supplierDebtForm.invoice_date,
+      entry_type: supplierDebtForm.entry_type,
+      description: supplierDebtForm.description.trim() || null,
+      total_amount: totalAmount
+    })
+    .select("id")
+    .single();
+
+  if (debtError || !savedDebt) {
+    console.error("Supplier debt could not be saved", debtError);
+    setSupplierDebtStatus(`Borç kaydedilemedi: ${debtError?.message || "Supabase tablo/policy ayarlarını kontrol edin."}`);
+    setSupplierDebtSaving(false);
+    return;
+  }
+
+  if (isItemEntry && cleanItems.length > 0) {
+    const { error: itemsError } = await supabase
+      .from("supplier_debt_items")
+      .insert(cleanItems.map(item => ({ ...item, debt_id: savedDebt.id })));
+
+    if (itemsError) {
+      console.error("Supplier debt items could not be saved", itemsError);
+      setSupplierDebtStatus("Borç kaydedildi ama ürün kalemleri kaydedilemedi.");
+      setSupplierDebtSaving(false);
+      await loadSupplierDebtData();
+      return;
+    }
+  }
+
+  await loadSupplierDebtData();
+  setSupplierDebtForm(createSupplierDebtForm(getDateInputValue(new Date())));
+  setSupplierDebtStatus("Borç kaydedildi.");
+  setSupplierDebtSaving(false);
+}
+
+  async function saveSupplierPayment(event) {
+  event.preventDefault();
+  const amount = parseDecimalInput(supplierPaymentForm.amount);
+  const supplierName = supplierPaymentForm.supplier_name.trim() || SUPPLIER_DEBT_DEFAULT_SUPPLIER;
+
+  if (!supplierPaymentForm.payment_date) {
+    setSupplierDebtStatus("Ödeme tarihi seçmek zorunlu.");
+    return;
+  }
+
+  if (amount <= 0) {
+    setSupplierDebtStatus("Ödeme tutarı 0'dan büyük olmalı.");
+    return;
+  }
+
+  setSupplierPaymentSaving(true);
+  setSupplierDebtStatus("Ödeme kaydediliyor...");
+
+  const { error } = await supabase
+    .from("supplier_debt_payments")
+    .insert({
+      supplier_name: supplierName,
+      payment_date: supplierPaymentForm.payment_date,
+      amount,
+      note: supplierPaymentForm.note.trim() || null
+    });
+
+  if (error) {
+    console.error("Supplier debt payment could not be saved", error);
+    setSupplierDebtStatus(`Ödeme kaydedilemedi: ${error.message || "Supabase tablo/policy ayarlarını kontrol edin."}`);
+    setSupplierPaymentSaving(false);
+    return;
+  }
+
+  await loadSupplierDebtData();
+  setSupplierPaymentForm(createSupplierPaymentForm(getDateInputValue(new Date())));
+  setSupplierDebtStatus("Ödeme kaydedildi.");
+  setSupplierPaymentSaving(false);
+}
+
+  async function deleteSupplierDebt(debt) {
+  if (deletingSupplierDebtId) return;
+  const confirmed = window.confirm(`${parseDateOnly(debt.invoice_date).toLocaleDateString("tr-TR")} tarihli ${formatPrice(debt.total_amount)} borç kaydı silinsin mi?`);
+  if (!confirmed) return;
+
+  setDeletingSupplierDebtId(debt.id);
+  setSupplierDebtStatus("Borç siliniyor...");
+  const { error } = await supabase
+    .from("supplier_debts")
+    .delete()
+    .eq("id", debt.id);
+
+  if (error) {
+    console.error("Supplier debt could not be deleted", error);
+    setSupplierDebtStatus(`Borç silinemedi: ${error.message || "Supabase delete policy ayarını kontrol edin."}`);
+    setDeletingSupplierDebtId(null);
+    return;
+  }
+
+  await loadSupplierDebtData();
+  setSupplierDebtStatus("Borç silindi.");
+  setDeletingSupplierDebtId(null);
+}
+
+  async function deleteSupplierPayment(payment) {
+  if (deletingSupplierPaymentId) return;
+  const confirmed = window.confirm(`${parseDateOnly(payment.payment_date).toLocaleDateString("tr-TR")} tarihli ${formatPrice(payment.amount)} ödeme kaydı silinsin mi?`);
+  if (!confirmed) return;
+
+  setDeletingSupplierPaymentId(payment.id);
+  setSupplierDebtStatus("Ödeme siliniyor...");
+  const { error } = await supabase
+    .from("supplier_debt_payments")
+    .delete()
+    .eq("id", payment.id);
+
+  if (error) {
+    console.error("Supplier debt payment could not be deleted", error);
+    setSupplierDebtStatus(`Ödeme silinemedi: ${error.message || "Supabase delete policy ayarını kontrol edin."}`);
+    setDeletingSupplierPaymentId(null);
+    return;
+  }
+
+  await loadSupplierDebtData();
+  setSupplierDebtStatus("Ödeme silindi.");
+  setDeletingSupplierPaymentId(null);
 }
 
   async function loadExpiryItems() {
@@ -2287,6 +2606,7 @@ async function clearOrder(orderId) {
   const navItems = [
     { label: "Masalar", icon: Coffee, action: goToDashboard, active: screen === "tables" },
     { label: "Gün Sonu", icon: WalletCards, action: openDailyRevenueScreen, active: screen === "daily-revenue" },
+    { label: "Borç Takip", icon: ReceiptText, action: openSupplierDebtScreen, active: screen === "supplier-debts" },
     { label: "Satış Raporları", icon: BarChart3, action: openSalesReportFromNav, active: Boolean(report) },
     { label: "Sipariş Geçmişi", icon: ClipboardList, action: openOrderHistory, active: screen === "order-history" },
     { label: "Ürünler", icon: Boxes, action: () => goToScreen("products"), active: screen === "products" },
@@ -2407,6 +2727,11 @@ async function clearOrder(orderId) {
               <span>Açık Adisyon</span>
               <strong>{customerOpenOrderCount}</strong>
               <small>{showOnlyOpenTables ? "Tüm masaları göster" : "Açık masaları göster"}</small>
+            </button>
+            <button className="summary-card debt" onClick={openSupplierDebtScreen}>
+              <span>Borç Takip</span>
+              <strong>{supplierDebtBalance > 0 ? formatPrice(supplierDebtBalance) : "Yok"}</strong>
+              <small>Saray Börekçisi</small>
             </button>
             <button className="summary-card stock" onClick={() => goToScreen("critical-stock")}>
               <span>Kritik Stok</span>
@@ -2840,6 +3165,306 @@ async function clearOrder(orderId) {
                     onClick={() => loadDailyRevenueForDate(record.revenue_date, { scrollToForm: true })}
                   >
                     Aç / Düzenle
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </section>
+      </div>
+    );
+  }
+
+  if (screen === "supplier-debts") {
+    return (
+      <div className="app supplier-debt-page">
+        <header className="topbar">
+          <button className="back" onClick={() => setScreen("tables")}><ArrowLeft /></button>
+          <div>
+            <h1>Borç Takip</h1>
+            <p>Saray Börekçisi faturaları, ürün kalemleri ve ödemeler</p>
+          </div>
+          <button className="manage-button" type="button" onClick={loadSupplierDebtData}>
+            <ReceiptText size={18} /> Yenile
+          </button>
+        </header>
+
+        <section className="supplier-debt-summary">
+          <div>
+            <span>Toplam Fatura</span>
+            <strong>{formatPrice(supplierDebtInvoiceTotal)}</strong>
+          </div>
+          <div>
+            <span>Toplam Ödeme</span>
+            <strong>{formatPrice(supplierDebtPaymentTotal)}</strong>
+          </div>
+          <div className={supplierDebtBalance > 0 ? "open" : "paid"}>
+            <span>Ödenecek</span>
+            <strong>{supplierDebtBalance > 0 ? formatPrice(supplierDebtBalance) : "Borç yok"}</strong>
+          </div>
+        </section>
+
+        <section className="supplier-debt-layout">
+          <div className="supplier-debt-forms">
+            <form className="product-form supplier-debt-form" onSubmit={saveSupplierDebt} ref={supplierDebtFormRef}>
+              <h2>Yeni Borç</h2>
+
+              <label>
+                Tedarikçi
+                <input
+                  value={supplierDebtForm.supplier_name}
+                  onChange={event => updateSupplierDebtForm("supplier_name", event.target.value)}
+                  placeholder="Saray Börekçisi"
+                />
+              </label>
+
+              <label>
+                Fatura tarihi
+                <input
+                  type="date"
+                  value={supplierDebtForm.invoice_date}
+                  onChange={event => updateSupplierDebtForm("invoice_date", event.target.value)}
+                />
+              </label>
+
+              <div className="debt-entry-tabs">
+                <button
+                  type="button"
+                  className={supplierDebtForm.entry_type === "items" ? "active" : ""}
+                  onClick={() => updateSupplierDebtForm("entry_type", "items")}
+                >
+                  Ürünlü Giriş
+                </button>
+                <button
+                  type="button"
+                  className={supplierDebtForm.entry_type === "bulk" ? "active" : ""}
+                  onClick={() => updateSupplierDebtForm("entry_type", "bulk")}
+                >
+                  Toplu Borç
+                </button>
+              </div>
+
+              {supplierDebtForm.entry_type === "items" ? (
+                <div className="supplier-item-editor">
+                  {supplierDebtForm.items.map((item, index) => {
+                    const lineTotal = parseDecimalInput(item.quantity) * parseDecimalInput(item.unit_price);
+                    return (
+                      <div className="supplier-item-row" key={index}>
+                        <label>
+                          Ürün
+                          <input
+                            value={item.product_name}
+                            onChange={event => updateSupplierDebtItem(index, "product_name", event.target.value)}
+                            placeholder="Poğaça, börek..."
+                          />
+                        </label>
+                        <label>
+                          Miktar
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.quantity}
+                            onChange={event => updateSupplierDebtItem(index, "quantity", event.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label>
+                          Birim
+                          <select
+                            value={item.unit}
+                            onChange={event => updateSupplierDebtItem(index, "unit", event.target.value)}
+                          >
+                            <option value="adet">adet</option>
+                            <option value="kg">kg</option>
+                            <option value="tepsi">tepsi</option>
+                            <option value="paket">paket</option>
+                          </select>
+                        </label>
+                        <label>
+                          Birim fiyat
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.unit_price}
+                            onChange={event => updateSupplierDebtItem(index, "unit_price", event.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <strong>{formatPrice(lineTotal)}</strong>
+                        <button type="button" onClick={() => removeSupplierDebtItem(index)} aria-label="Kalemi sil">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <button className="add-debt-item" type="button" onClick={addSupplierDebtItem}>
+                    <Plus size={17} /> Ürün Kalemi Ekle
+                  </button>
+
+                  <div className="daily-total-card">
+                    <span>Fatura Toplamı</span>
+                    <strong>{formatPrice(supplierDebtItemsTotal)}</strong>
+                  </div>
+                </div>
+              ) : (
+                <label>
+                  Toplam borç
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={supplierDebtForm.total_amount}
+                    onChange={event => updateSupplierDebtForm("total_amount", event.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+              )}
+
+              <label>
+                Not
+                <textarea
+                  value={supplierDebtForm.description}
+                  onChange={event => updateSupplierDebtForm("description", event.target.value)}
+                  placeholder="Fatura no, teslim notu..."
+                />
+              </label>
+
+              {supplierDebtStatus && <p className="status">{supplierDebtStatus}</p>}
+
+              <div className="form-actions">
+                <button type="submit" disabled={supplierDebtSaving}>
+                  <Save size={18} /> {supplierDebtSaving ? "Kaydediliyor" : "Borcu Kaydet"}
+                </button>
+                <button type="button" onClick={resetSupplierDebtForm}>Temizle</button>
+              </div>
+            </form>
+
+            <form className="product-form supplier-payment-form" onSubmit={saveSupplierPayment}>
+              <h2>Ödeme Gir</h2>
+
+              <label>
+                Tedarikçi
+                <input
+                  value={supplierPaymentForm.supplier_name}
+                  onChange={event => setSupplierPaymentForm(prev => ({ ...prev, supplier_name: event.target.value }))}
+                  placeholder="Saray Börekçisi"
+                />
+              </label>
+
+              <div className="form-grid">
+                <label>
+                  Ödeme tarihi
+                  <input
+                    type="date"
+                    value={supplierPaymentForm.payment_date}
+                    onChange={event => setSupplierPaymentForm(prev => ({ ...prev, payment_date: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Ödenen tutar
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={supplierPaymentForm.amount}
+                    onChange={event => setSupplierPaymentForm(prev => ({ ...prev, amount: event.target.value }))}
+                    placeholder={supplierDebtBalance > 0 ? formatSmartNumber(supplierDebtBalance) : "0"}
+                  />
+                </label>
+              </div>
+
+              <label>
+                Not
+                <textarea
+                  value={supplierPaymentForm.note}
+                  onChange={event => setSupplierPaymentForm(prev => ({ ...prev, note: event.target.value }))}
+                  placeholder="Havale, nakit, açıklama..."
+                />
+              </label>
+
+              <div className="form-actions">
+                <button type="submit" disabled={supplierPaymentSaving}>
+                  <Banknote size={18} /> {supplierPaymentSaving ? "Kaydediliyor" : "Ödemeyi Kaydet"}
+                </button>
+                <button type="button" onClick={resetSupplierPaymentForm}>Temizle</button>
+              </div>
+            </form>
+          </div>
+
+          <section className="supplier-debt-ledger">
+            <div className="supplier-ledger-head">
+              <div>
+                <h2>Faturalar</h2>
+                <p>Tarih tarih borç dökümü</p>
+              </div>
+              <strong>{supplierDebtBalance > 0 ? `${formatPrice(supplierDebtBalance)} ödenecek` : "Borç yok"}</strong>
+            </div>
+
+            {supplierDebts.length === 0 && <p className="empty ledger-empty">Henüz borç kaydı yok.</p>}
+
+            {supplierDebts.map(debt => (
+              <article className="supplier-debt-card" key={debt.id}>
+                <div className="supplier-debt-card-head">
+                  <div>
+                    <strong>{parseDateOnly(debt.invoice_date).toLocaleDateString("tr-TR")}</strong>
+                    <span>{debt.supplier_name || SUPPLIER_DEBT_DEFAULT_SUPPLIER}</span>
+                  </div>
+                  <b>{formatPrice(debt.total_amount)}</b>
+                </div>
+
+                {debt.description && <p>{debt.description}</p>}
+
+                {debt.items?.length > 0 ? (
+                  <div className="supplier-debt-items">
+                    {debt.items.map(item => (
+                      <div key={item.id || `${debt.id}-${item.product_name}`}>
+                        <span>
+                          {item.product_name}
+                          <small>{formatSmartNumber(item.quantity)} {item.unit} x {formatPrice(item.unit_price)}</small>
+                        </span>
+                        <b>{formatPrice(item.total_price)}</b>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <em>Toplu borç girişi</em>
+                )}
+
+                <button
+                  type="button"
+                  className="danger ledger-delete"
+                  onClick={() => deleteSupplierDebt(debt)}
+                  disabled={deletingSupplierDebtId === debt.id}
+                >
+                  {deletingSupplierDebtId === debt.id ? "Siliniyor" : "Sil"}
+                </button>
+              </article>
+            ))}
+
+            <div className="supplier-ledger-head payment-head">
+              <div>
+                <h2>Ödemeler</h2>
+                <p>Yapılan ödeme kayıtları</p>
+              </div>
+              <strong>{formatPrice(supplierDebtPaymentTotal)}</strong>
+            </div>
+
+            {supplierDebtPayments.length === 0 && <p className="empty ledger-empty">Henüz ödeme kaydı yok.</p>}
+
+            <div className="supplier-payment-list">
+              {supplierDebtPayments.map(payment => (
+                <div className="supplier-payment-row" key={payment.id}>
+                  <span>
+                    {parseDateOnly(payment.payment_date).toLocaleDateString("tr-TR")}
+                    <small>{payment.note || payment.supplier_name || SUPPLIER_DEBT_DEFAULT_SUPPLIER}</small>
+                  </span>
+                  <strong>{formatPrice(payment.amount)}</strong>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => deleteSupplierPayment(payment)}
+                    disabled={deletingSupplierPaymentId === payment.id}
+                  >
+                    {deletingSupplierPaymentId === payment.id ? "Siliniyor" : "Sil"}
                   </button>
                 </div>
               ))}
