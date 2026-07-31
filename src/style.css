@@ -566,7 +566,7 @@ button{font-family:inherit; cursor:pointer}
 
 .stock-entry-row{
   display:grid;
-  grid-template-columns:1.2fr .55fr .55fr 1fr auto;
+  grid-template-columns:1.15fr .48fr .58fr .55fr 1fr auto;
   align-items:center;
   gap:12px;
   background:rgba(23,29,34,.94);
@@ -590,7 +590,8 @@ button{font-family:inherit; cursor:pointer}
   color:var(--gold);
 }
 
-.stock-entry-row input{
+.stock-entry-row input,
+.stock-entry-row select{
   min-height:44px;
   border:1px solid rgba(255,255,255,.08);
   border-radius:14px;
@@ -600,7 +601,8 @@ button{font-family:inherit; cursor:pointer}
   padding:0 12px;
 }
 
-.stock-entry-row input:focus{
+.stock-entry-row input:focus,
+.stock-entry-row select:focus{
   border-color:rgba(243,154,34,.75);
   box-shadow:0 0 0 3px rgba(243,154,34,.12);
 }
@@ -616,13 +618,18 @@ button{font-family:inherit; cursor:pointer}
 
 .stock-entry-actions{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr 1fr 1.25fr;
   gap:8px;
 }
 
 .stock-entry-actions .danger{
   color:white;
   background:#b93434;
+}
+
+.stock-entry-actions .secondary{
+  color:var(--text);
+  background:var(--panel2);
 }
 
 .order-layout .topbar{justify-content:flex-start}
@@ -2033,7 +2040,9 @@ button:disabled{
 .search-box,
 .login-panel input,
 .product-form input,
+.product-form select,
 .stock-entry-row input,
+.stock-entry-row select,
 .order-note textarea,
 .equal-split input,
 .split-line input{
@@ -2046,7 +2055,9 @@ button:disabled{
 .search-box:focus-within,
 .login-panel input:focus,
 .product-form input:focus,
+.product-form select:focus,
 .stock-entry-row input:focus,
+.stock-entry-row select:focus,
 .order-note textarea:focus,
 .equal-split input:focus,
 .split-line input:focus{
@@ -2916,6 +2927,7 @@ button{
 .product-form input,
 .product-form select,
 .stock-entry-row input,
+.stock-entry-row select,
 .search-box input,
 .order-note textarea,
 .equal-split input,
@@ -3383,7 +3395,7 @@ button{
   }
 
   .stock-entry-row{
-    grid-template-columns:1.2fr .65fr .7fr 1fr auto;
+    grid-template-columns:1.1fr .55fr .65fr .7fr 1fr auto;
   }
 
   .critical-row{
@@ -4020,6 +4032,7 @@ body{
 }
 
 .stock-entry-row input,
+.stock-entry-row select,
 .product-form input,
 .product-form select,
 .history-toolbar input,

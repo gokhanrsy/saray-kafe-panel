@@ -94,6 +94,11 @@ const emptyExpiryForm = {
   active: true
 };
 
+const STOCK_LOCATIONS = ["Dolap", "Depo", "Tezgah"];
+
+const getSelectableStockLocation = value =>
+  STOCK_LOCATIONS.includes(value) ? value : STOCK_LOCATIONS[0];
+
 const createDailyRevenueForm = dateValue => ({
   revenue_date: dateValue,
   cash_amount: "",
@@ -197,7 +202,7 @@ function App() {
     category: "",
     price: "",
     stock: "",
-    location: "",
+    location: STOCK_LOCATIONS[0],
     active: true,
     favorite: false,
     unit_type: "piece"
@@ -211,6 +216,7 @@ function App() {
   const [stockSearchTerm, setStockSearchTerm] = useState("");
   const [stockEntryAmounts, setStockEntryAmounts] = useState({});
   const [stockEntryNotes, setStockEntryNotes] = useState({});
+  const [stockEntryLocations, setStockEntryLocations] = useState({});
   const [stockEntryStatus, setStockEntryStatus] = useState("");
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -1558,7 +1564,7 @@ async function clearOrder(orderId) {
     category: product.category || "",
     price: String(product.price ?? ""),
     stock: String(product.stock ?? ""),
-    location: product.location || "",
+    location: getSelectableStockLocation(product.location),
     active: product.active !== false,
     favorite: product.favorite === true,
     unit_type: product.unit_type || "piece"
@@ -1580,7 +1586,7 @@ async function clearOrder(orderId) {
   const categoryName = productForm.category.trim();
   const price = Number(productForm.price || 0);
   const stock = Number(productForm.stock || 0);
-  const location = productForm.location.trim();
+  const location = getSelectableStockLocation(productForm.location);
 
   if (!name) {
     setProductStatus("Ürün adı zorunlu.");
@@ -1595,7 +1601,7 @@ async function clearOrder(orderId) {
     category: categoryName,
     price,
     stock,
-    location: location || null,
+    location,
     active: productForm.active,
     favorite: productForm.favorite,
     unit_type: productForm.unit_type || "piece"
@@ -1877,6 +1883,7 @@ async function clearOrder(orderId) {
   async function adjustStock(product, direction) {
   const quantity = Number(stockEntryAmounts[product.name] || 0);
   const increasing = direction === "in";
+  const location = getStockEntryLocation(product);
   const note = stockEntryNotes[product.name]?.trim() || (increasing ? "Stok girişi" : "Stok düşme");
 
   if (quantity <= 0) {
@@ -1903,7 +1910,7 @@ async function clearOrder(orderId) {
 
   const { error: updateError } = await supabase
     .from("products")
-    .update({ stock: nextStock })
+    .update({ stock: nextStock, location })
     .eq("name", product.name);
 
   if (updateError) {
@@ -1939,6 +1946,29 @@ async function clearOrder(orderId) {
 
   async function subtractStock(product) {
   await adjustStock(product, "out");
+}
+
+  function getStockEntryLocation(product) {
+  return getSelectableStockLocation(stockEntryLocations[product.name] || product.location);
+}
+
+  async function saveStockLocation(product) {
+  const location = getStockEntryLocation(product);
+  setStockEntryStatus("Stok yeri kaydediliyor...");
+
+  const { error } = await supabase
+    .from("products")
+    .update({ location })
+    .eq("name", product.name);
+
+  if (error) {
+    console.error(error);
+    setStockEntryStatus("Stok yeri kaydedilemedi. Supabase products tablosuna location kolonunu ekleyin.");
+    return;
+  }
+
+  await loadProducts();
+  setStockEntryStatus(`${product.name} stok yeri ${location} olarak kaydedildi.`);
 }
 
   async function openOrder(tableName) {
@@ -3019,11 +3049,14 @@ async function clearOrder(orderId) {
 
             <label>
               Stok yeri
-              <input
+              <select
                 value={productForm.location}
                 onChange={event => setProductForm(prev => ({ ...prev, location: event.target.value }))}
-                placeholder="Örn. Dolap, Depo, Tezgah"
-              />
+              >
+                {STOCK_LOCATIONS.map(location => (
+                  <option key={location} value={location}>{location}</option>
+                ))}
+              </select>
             </label>
 
             <label className="switch-row">
@@ -3633,9 +3666,9 @@ async function clearOrder(orderId) {
                   value={expiryForm.location}
                   onChange={event => setExpiryForm(prev => ({ ...prev, location: event.target.value }))}
                 >
-                  <option>Dolap</option>
-                  <option>Depo</option>
-                  <option>Tezgah</option>
+                  {STOCK_LOCATIONS.map(location => (
+                    <option key={location} value={location}>{location}</option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -3815,6 +3848,15 @@ async function clearOrder(orderId) {
                 </span>
               </div>
               <b>{Number(product.stock || 0)} stok</b>
+              <select
+                value={getStockEntryLocation(product)}
+                onChange={event => setStockEntryLocations(prev => ({ ...prev, [product.name]: event.target.value }))}
+                aria-label={`${product.name} stok yeri`}
+              >
+                {STOCK_LOCATIONS.map(location => (
+                  <option key={location} value={location}>{location}</option>
+                ))}
+              </select>
               <input
                 type="number"
                 min="1"
@@ -3831,6 +3873,7 @@ async function clearOrder(orderId) {
               <div className="stock-entry-actions">
                 <button onClick={() => addStock(product)}>Ekle</button>
                 <button className="danger" onClick={() => subtractStock(product)}>Düş</button>
+                <button className="secondary" onClick={() => saveStockLocation(product)}>Yeri Kaydet</button>
               </div>
             </div>
           ))}
