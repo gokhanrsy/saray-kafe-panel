@@ -197,6 +197,7 @@ function App() {
     category: "",
     price: "",
     stock: "",
+    location: "",
     active: true,
     favorite: false,
     unit_type: "piece"
@@ -491,6 +492,7 @@ async function clearOrder(orderId) {
         !normalizedSearch ||
         product.name?.toLowerCase().includes(normalizedSearch) ||
         product.category?.toLowerCase().includes(normalizedSearch) ||
+        product.location?.toLowerCase().includes(normalizedSearch) ||
         product.unit_type?.toLowerCase().includes(normalizedSearch)
       );
   }, [products, productSearchTerm, showInactiveProducts]);
@@ -657,7 +659,8 @@ async function clearOrder(orderId) {
       .filter(product =>
         !normalizedSearch ||
         product.name?.toLowerCase().includes(normalizedSearch) ||
-        product.category?.toLowerCase().includes(normalizedSearch)
+        product.category?.toLowerCase().includes(normalizedSearch) ||
+        product.location?.toLowerCase().includes(normalizedSearch)
       );
   }, [products, stockSearchTerm]);
 
@@ -1555,6 +1558,7 @@ async function clearOrder(orderId) {
     category: product.category || "",
     price: String(product.price ?? ""),
     stock: String(product.stock ?? ""),
+    location: product.location || "",
     active: product.active !== false,
     favorite: product.favorite === true,
     unit_type: product.unit_type || "piece"
@@ -1576,6 +1580,7 @@ async function clearOrder(orderId) {
   const categoryName = productForm.category.trim();
   const price = Number(productForm.price || 0);
   const stock = Number(productForm.stock || 0);
+  const location = productForm.location.trim();
 
   if (!name) {
     setProductStatus("Ürün adı zorunlu.");
@@ -1590,6 +1595,7 @@ async function clearOrder(orderId) {
     category: categoryName,
     price,
     stock,
+    location: location || null,
     active: productForm.active,
     favorite: productForm.favorite,
     unit_type: productForm.unit_type || "piece"
@@ -1604,8 +1610,10 @@ async function clearOrder(orderId) {
   if (error) {
     console.error(error);
     setProductStatus(
-      String(error.message || "").includes("favorite") || String(error.message || "").includes("unit_type")
-        ? "Ürün kaydedilemedi. Supabase products tablosuna favorite ve unit_type kolonlarını ekleyin."
+      String(error.message || "").includes("favorite") ||
+      String(error.message || "").includes("unit_type") ||
+      String(error.message || "").includes("location")
+        ? "Ürün kaydedilemedi. Supabase products tablosuna favorite, unit_type ve location kolonlarını ekleyin."
         : "Ürün kaydedilemedi."
     );
     setProductSaving(false);
@@ -1866,9 +1874,10 @@ async function clearOrder(orderId) {
   persistFavoriteOrder(orderedNames);
 }
 
-  async function addStock(product) {
+  async function adjustStock(product, direction) {
   const quantity = Number(stockEntryAmounts[product.name] || 0);
-  const note = stockEntryNotes[product.name]?.trim() || "Stok girişi";
+  const increasing = direction === "in";
+  const note = stockEntryNotes[product.name]?.trim() || (increasing ? "Stok girişi" : "Stok düşme");
 
   if (quantity <= 0) {
     setStockEntryStatus("Miktar 0'dan büyük olmalı.");
@@ -1890,7 +1899,7 @@ async function clearOrder(orderId) {
   }
 
   const currentStock = Number(currentProduct?.stock || 0);
-  const nextStock = currentStock + quantity;
+  const nextStock = increasing ? currentStock + quantity : Math.max(0, currentStock - quantity);
 
   const { error: updateError } = await supabase
     .from("products")
@@ -1907,8 +1916,8 @@ async function clearOrder(orderId) {
     .from("stock_movements")
     .insert({
       product_name: product.name,
-      movement_type: "purchase",
-      quantity,
+      movement_type: increasing ? "purchase" : "sale",
+      quantity: increasing ? quantity : -quantity,
       note
     });
 
@@ -1921,7 +1930,15 @@ async function clearOrder(orderId) {
   await loadProducts();
   setStockEntryAmounts(prev => ({ ...prev, [product.name]: "" }));
   setStockEntryNotes(prev => ({ ...prev, [product.name]: "" }));
-  setStockEntryStatus(`${product.name} stoğu güncellendi.`);
+  setStockEntryStatus(`${product.name} stoğu ${increasing ? "eklendi" : "düşüldü"}.`);
+}
+
+  async function addStock(product) {
+  await adjustStock(product, "in");
+}
+
+  async function subtractStock(product) {
+  await adjustStock(product, "out");
 }
 
   async function openOrder(tableName) {
@@ -3000,6 +3017,15 @@ async function clearOrder(orderId) {
               </select>
             </label>
 
+            <label>
+              Stok yeri
+              <input
+                value={productForm.location}
+                onChange={event => setProductForm(prev => ({ ...prev, location: event.target.value }))}
+                placeholder="Örn. Dolap, Depo, Tezgah"
+              />
+            </label>
+
             <label className="switch-row">
               <input
                 type="checkbox"
@@ -3065,7 +3091,10 @@ async function clearOrder(orderId) {
               <div className={`product-row ${product.active === false ? "inactive" : ""}`} key={product.name}>
                 <div>
                   <strong>{product.name}</strong>
-                  <span>{product.category || "Kategorisiz"}</span>
+                  <span>
+                    {product.category || "Kategorisiz"}
+                    {product.location ? ` · ${product.location}` : ""}
+                  </span>
                 </div>
                 <b>{formatPrice(product.price)}</b>
                 <em>{Number(product.stock || 0)} stok</em>
@@ -3780,7 +3809,10 @@ async function clearOrder(orderId) {
             <div className="stock-entry-row" key={product.name}>
               <div>
                 <strong>{product.name}</strong>
-                <span>{product.category || "Kategorisiz"}</span>
+                <span>
+                  {product.category || "Kategorisiz"}
+                  {product.location ? ` · ${product.location}` : ""}
+                </span>
               </div>
               <b>{Number(product.stock || 0)} stok</b>
               <input
@@ -3796,7 +3828,10 @@ async function clearOrder(orderId) {
                 onChange={event => setStockEntryNotes(prev => ({ ...prev, [product.name]: event.target.value }))}
                 placeholder="Not"
               />
-              <button onClick={() => addStock(product)}>Stok Ekle</button>
+              <div className="stock-entry-actions">
+                <button onClick={() => addStock(product)}>Ekle</button>
+                <button className="danger" onClick={() => subtractStock(product)}>Düş</button>
+              </div>
             </div>
           ))}
         </section>

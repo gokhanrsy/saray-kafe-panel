@@ -614,6 +614,17 @@ button{font-family:inherit; cursor:pointer}
   font-weight:900;
 }
 
+.stock-entry-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.stock-entry-actions .danger{
+  color:white;
+  background:#b93434;
+}
+
 .order-layout .topbar{justify-content:flex-start}
 
 .order-tools{
